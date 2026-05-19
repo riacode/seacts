@@ -1,11 +1,8 @@
-name: seacts
+name: seacts-modal
 channels:
-  - defaults
   - conda-forge
 dependencies:
-  - python=3.10
-  - pip=26.0.1
-  - numpy=1.24
+  - python=3.11
+  - pip
   - pip:
-    - modal
-    - wandb
+      - modal>=1.1
