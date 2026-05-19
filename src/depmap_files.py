@@ -13,7 +13,10 @@ MANIFEST_URL = "https://depmap.org/portal/api/download/files"
 
 REQUIRED_FILE_GROUPS = {
     "dependency": ("CRISPRGeneEffect.csv",),
+    "gene_metadata": ("Gene.csv",),
     "metadata": ("Model.csv", "sample_info.csv"),
+    "subtype_matrix": ("SubtypeMatrix.csv",),
+    "subtype_tree": ("SubtypeTree.csv",),
     "expression": (
         "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
         "OmicsExpressionProteinCodingGenesTPMLogp1.csv",
@@ -24,7 +27,10 @@ REQUIRED_FILE_GROUPS = {
         "OmicsCNGeneWGS.csv",
         "OmicsCNGeneMC_WES.csv",
     ),
-    "mutation": ("OmicsSomaticMutationsMatrixDamaging.csv",),
+    "damaging_mutation": ("OmicsSomaticMutationsMatrixDamaging.csv",),
+    "hotspot_mutation": ("OmicsSomaticMutationsMatrixHotspot.csv",),
+    "global_signatures": ("OmicsGlobalSignatures.csv",),
+    "molecular_subtypes": ("OmicsInferredMolecularSubtypes.csv",),
 }
 
 FILE_COLUMN_CANDIDATES = ("file", "filename", "file_name", "name")

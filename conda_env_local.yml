@@ -1,4 +1,4 @@
-name: seacts-local
+name: seacts
 channels:
   - conda-forge
 dependencies:

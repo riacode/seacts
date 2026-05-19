@@ -1,18 +1,18 @@
-# SEACTS
+# CS224R Custom Final Project
 
-CS224R Custom Final Project: Sequential Evidence Acquisition for Cancer Target Selection
+SEACTS: Sequential Evidence Acquisition for Cancer Target Selection
 
 ## Objective
 
-Modern cancer target discovery is incredibly difficult, with clinical drug development failure rates often exceeding 90% [SUN20223049]. This process relies on integrating diverse biological evidence sources like gene expression, mutations, and pathway context to identify genes whose perturbation impairs tumor viability. In practice, these modalities are highly heterogeneous, uneven in quality, and often redundant, yet most existing methods are designed under the assumption that all relevant data are available at decision time and should be used simultaneously. This obscures a key decision-making problem: which evidence is actually necessary for a given cancer context, and when does additional information cease to be worth its cost? In this project, we focus on cancer dependency prediction using DepMap data and approach target selection as a sequential decision-making problem under a budget constraint. Given a cancer cell line and a set of candidate genes, an agent must decide which biological evidence to acquire, in what order, and when to stop before selecting a gene to target. We model this process using deep reinforcement learning, where the agent is rewarded for selecting genes with strong dependency, using CRISPR dependency as a proxy for intervention effectiveness, while minimizing the cost of evidence acquisition. In our simulated environment, query costs serve as proxies for experimental, computational, or assay burden in real target-discovery pipelines. Our objective is to determine whether context-conditioned, adaptive evidence acquisition can approach the performance of static multi-omics models while using fewer modalities, and to understand how optimal evidence strategies vary across cancer types.
+Modern cancer target discovery is incredibly difficult, with clinical drug development failure rates often exceeding 90% (Sun et al., 2022). This process relies on integrating diverse biological evidence sources like gene expression, mutations, and pathway context to identify genes whose perturbation impairs tumor viability. In practice, these modalities are highly heterogeneous, uneven in quality, and often redundant, yet most existing methods are designed under the assumption that all relevant data are available at decision time and should be used simultaneously. This obscures a key decision-making problem: which evidence is actually necessary for a given cancer context, and when does additional information cease to be worth its cost? In this project, we focus on cancer dependency prediction using DepMap data and approach target selection as a sequential decision-making problem under a budget constraint. Given a cancer cell line and a set of candidate genes, an agent must decide which biological evidence to acquire, in what order, and when to stop before selecting a gene to target. We model this process using deep reinforcement learning, where the agent is rewarded for selecting genes with strong dependency, using CRISPR dependency as a proxy for intervention effectiveness, while minimizing the cost of evidence acquisition. In our simulated environment, query costs serve as proxies for experimental, computational, or assay burden in real target-discovery pipelines. Our objective is to determine whether context-conditioned, adaptive evidence acquisition can approach the performance of static multi-omics models while using fewer modalities, and to understand how optimal evidence strategies vary across cancer types.
 
 ## Related Work
 
-Cancer dependency prediction has been extensively studied using large-scale data such as DepMap, which integrates CRISPR gene knockout screens with genomic, transcriptomic, and copy-number data across hundreds of cancer cell lines [depmap_portal; tsherniak2017dependency]. These resources have enabled predictive models of gene essentiality and identification of therapeutic vulnerabilities, with recent work further constructing clinically informed dependency maps for target prioritization [pacini2024dependency] and extending these ideas to translational settings by learning predictors that generalize from cell lines to patient tumors [shi2024tcga_dependency]. However, these approaches rely on static multi-omics integration, treating all modalities as simultaneously available rather than modeling how evidence should be acquired under constraints.
+Cancer dependency prediction has been extensively studied using large-scale data such as DepMap, which integrates CRISPR gene knockout screens with genomic, transcriptomic, and copy-number data across hundreds of cancer cell lines (Broad Institute, n.d.; Tsherniak et al., 2017). These resources have enabled predictive models of gene essentiality and identification of therapeutic vulnerabilities, with recent work further constructing clinically informed dependency maps for target prioritization (Pacini et al., 2024) and extending these ideas to translational settings by learning predictors that generalize from cell lines to patient tumors (Shi et al., 2024). However, these approaches rely on static multi-omics integration, treating all modalities as simultaneously available rather than modeling how evidence should be acquired under constraints.
 
-A closely related line of work is active feature acquisition (AFA), which formulates prediction as a sequential decision problem in which an agent selects features to observe while trading off predictive accuracy and acquisition cost. Reinforcement learning (RL) has been widely applied in this setting, including early deep RL approaches for cost-aware feature selection [janisch2019costly_features] and more recent work on active modality selection in medical diagnosis [bernardino2022active_modality]. Recent advances have explored structured acquisition strategies and information-theoretic objectives, highlighting limitations of both RL-based policies and greedy approaches [huang2026information_templates]. While these methods capture sequential decision-making, they typically treat inputs as homogeneous features and focus on classification tasks. In contrast, biological evidence sources are heterogeneous and semantically distinct, and the downstream objective is often target ranking or intervention selection rather than simple prediction.
+A closely related line of work is active feature acquisition (AFA), which formulates prediction as a sequential decision problem in which an agent selects features to observe while trading off predictive accuracy and acquisition cost. Reinforcement learning (RL) has been widely applied in this setting, including early deep RL approaches for cost-aware feature selection (Janisch et al., 2018) and more recent work on active modality selection in medical diagnosis (Bernardino et al., 2022). Recent advances have explored structured acquisition strategies and information-theoretic objectives, highlighting limitations of both RL-based policies and greedy approaches (Huang et al., 2026). While these methods capture sequential decision-making, they typically treat inputs as homogeneous features and focus on classification tasks. In contrast, biological evidence sources are heterogeneous and semantically distinct, and the downstream objective is often target ranking or intervention selection rather than simple prediction.
 
-Another relevant direction is mixture-of-experts (MoE) and gating models, which learn to route inputs to specialized predictors [shazeer2017moe]. While these approaches capture modality specialization, they generally make single-step routing decisions and do not model sequential querying, stopping, or cost-aware decision-making. More broadly, Deep Q-Networks provide a standard framework for learning value functions over discrete actions with delayed rewards [mnih2015dqn], making them a natural fit for a finite-horizon evidence-acquisition environment. However, this framework has not been applied to settings where biological evidence acquisition and target selection are jointly optimized.
+Another relevant direction is mixture-of-experts (MoE) and gating models, which learn to route inputs to specialized predictors (Shazeer et al., 2017). While these approaches capture modality specialization, they generally make single-step routing decisions and do not model sequential querying, stopping, or cost-aware decision-making. More broadly, Deep Q-Networks provide a standard framework for learning value functions over discrete actions with delayed rewards (Mnih et al., 2015), making them a natural fit for a finite-horizon evidence-acquisition environment. However, this framework has not been applied to settings where biological evidence acquisition and target selection are jointly optimized.
 
 Our work bridges these areas by reformulating cancer target selection as a sequential, cost-aware decision problem. Unlike prior AFA methods, we explicitly model target selection as an action and evaluate performance using dependency-based outcomes. Unlike static multi-omics models, we allow the policy to adapt its evidence acquisition strategy based on cancer context, enabling analysis of how different biological settings influence optimal decision-making. To our knowledge, prior work has not explored jointly optimizing sequential evidence acquisition and target selection in cancer dependency maps under cancer-context conditioning.
 
@@ -39,14 +39,14 @@ This gives us the shared data/evaluation surface needed before adding the DQN ev
 
 ```bash
 conda env create -f conda_env_local.yml
-conda activate seacts-local
+conda activate seacts
 ```
 
 If the environment already exists after dependency changes:
 
 ```bash
 conda env update -f conda_env_local.yml --prune
-conda activate seacts-local
+conda activate seacts
 ```
 
 ## Modal
@@ -54,7 +54,7 @@ conda activate seacts-local
 Install and authenticate the Modal client in the conda environment:
 
 ```bash
-conda activate seacts-local
+conda activate seacts
 modal setup
 ```
 
@@ -64,13 +64,19 @@ Download the required DepMap files into the `seacts-data` Modal Volume:
 modal run modal_data.py
 ```
 
-The downloader fetches the DepMap manifest fresh from `https://depmap.org/portal/api/download/files`, selects the latest `DepMap Public` release by default, and downloads:
+The downloader fetches the DepMap manifest fresh from `https://depmap.org/portal/api/download/files`, selects the latest `DepMap Public` release by default, and downloads the dependency matrix, metadata, gene-aligned evidence matrices, and context files needed for the project:
 
 - `CRISPRGeneEffect.csv`
 - `Model.csv` or `sample_info.csv`
+- `Gene.csv`
+- `SubtypeMatrix.csv`
+- `SubtypeTree.csv`
 - `OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv`
 - `PortalOmicsCNGeneLog2.csv`
 - `OmicsSomaticMutationsMatrixDamaging.csv`
+- `OmicsSomaticMutationsMatrixHotspot.csv`
+- `OmicsGlobalSignatures.csv`
+- `OmicsInferredMolecularSubtypes.csv`
 
 ## Codebase Structure
 
@@ -96,15 +102,24 @@ modal_data.py         # DepMap download/prep launcher
 
 The project is designed to download real DepMap files on Modal rather than storing large raw data locally. The required raw files are persisted in the `seacts-data` Modal Volume.
 
-For real DepMap filenames, use `configs/depmap_baselines.yaml`:
+For real DepMap filenames, use `configs/depmap_baselines.yaml`. The current baseline pipeline consumes gene-aligned cell-line-by-gene matrices:
 
 - `data/raw/CRISPRGeneEffect.csv`
 - `data/raw/Model.csv`
 - `data/raw/OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv`
 - `data/raw/OmicsSomaticMutationsMatrixDamaging.csv`
+- `data/raw/OmicsSomaticMutationsMatrixHotspot.csv`
 - `data/raw/PortalOmicsCNGeneLog2.csv`
 
-Matrices should have cell lines as rows and genes as columns. Long-form files with `cell_line_id`, `gene`, and `value` columns are also supported.
+The downloader also keeps project context files for later cancer-context features and analysis:
+
+- `data/raw/Gene.csv`
+- `data/raw/SubtypeMatrix.csv`
+- `data/raw/SubtypeTree.csv`
+- `data/raw/OmicsGlobalSignatures.csv`
+- `data/raw/OmicsInferredMolecularSubtypes.csv`
+
+Baseline modality matrices should have cell lines as rows and genes as columns. Long-form files with `cell_line_id`, `gene`, and `value` columns are also supported.
 
 ## Current Baselines
 
@@ -117,13 +132,13 @@ Metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal 
 
 ## References
 
-- [SUN20223049] Sun, D., Gao, W., Hu, H., & Zhou, S. (2022). Why 90% of clinical drug development fails and how to improve it? *Acta Pharmaceutica Sinica B*. https://doi.org/10.1016/j.apsb.2022.02.002
-- [depmap_portal] Broad Institute. (2026). DepMap Portal. https://depmap.org/portal/
-- [tsherniak2017dependency] Tsherniak, A., Vazquez, F., Montgomery, P. G., et al. (2017). Defining a Cancer Dependency Map. *Cell*. https://doi.org/10.1016/j.cell.2017.06.010
-- [pacini2024dependency] Pacini, C., Dempster, J. M., Boyle, I., et al. (2024). A comprehensive clinically informed map of dependencies in cancer cells and framework for target prioritization. *Cancer Cell*. https://doi.org/10.1016/j.ccell.2023.12.004
-- [shi2024tcga_dependency] Shi, J., Aguirre, A. J., et al. (2024). Building a translational cancer dependency map for The Cancer Genome Atlas. *Nature Cancer*. https://doi.org/10.1038/s43018-024-00789-y
-- [janisch2019costly_features] Janisch, J., Pevný, T., & Lisý, V. (2018). Classification with Costly Features using Deep Reinforcement Learning. https://arxiv.org/abs/1711.07364
-- [bernardino2022active_modality] Bernardino, G., Jonsson, A., Loncaric, F., et al. (2022). Reinforcement Learning for Active Modality Selection During Diagnosis. *MICCAI 2022*.
-- [huang2026information_templates] Huang, H.-T., Dinh, D., & Oliva, J. B. (2026). Information Templates: A New Paradigm for Intelligent Active Feature Acquisition. https://arxiv.org/abs/2508.18380
-- [shazeer2017moe] Shazeer, N., Mirhoseini, A., Maziarz, K., et al. (2017). Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer. *ICLR*. https://arxiv.org/abs/1701.06538
-- [mnih2015dqn] Mnih, V., Kavukcuoglu, K., Silver, D., et al. (2015). Human-level control through deep reinforcement learning. *Nature*. https://doi.org/10.1038/nature14236
+- Bernardino, G., Jonsson, A., Loncaric, F., Castellote, P.-M. M., Sitges, M., Clarysse, P., & Duchateau, N. (2022). Reinforcement learning for active modality selection during diagnosis. *Medical Image Computing and Computer Assisted Intervention - MICCAI 2022*, 592-601.
+- Broad Institute. (n.d.). *DepMap Portal*. Retrieved May 19, 2026, from https://depmap.org/portal/
+- Huang, H.-T., Dinh, D., & Oliva, J. B. (2026). *Information templates: A new paradigm for intelligent active feature acquisition*. arXiv. https://arxiv.org/abs/2508.18380
+- Janisch, J., Pevný, T., & Lisý, V. (2018). *Classification with costly features using deep reinforcement learning*. arXiv. https://arxiv.org/abs/1711.07364
+- Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A. A., Veness, J., Bellemare, M. G., Graves, A., Riedmiller, M., Fidjeland, A. K., Ostrovski, G., et al. (2015). Human-level control through deep reinforcement learning. *Nature, 518*(7540), 529-533. https://doi.org/10.1038/nature14236
+- Pacini, C., Dempster, J. M., Boyle, I., Goncalves, E., Najgebauer, H., et al. (2024). A comprehensive clinically informed map of dependencies in cancer cells and framework for target prioritization. *Cancer Cell, 42*, 301-316. https://doi.org/10.1016/j.ccell.2023.12.016
+- Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G., & Dean, J. (2017). Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. *International Conference on Learning Representations*. https://arxiv.org/abs/1701.06538
+- Shi, X., Gekas, C., Verduzco, D., Petiwala, S., Jeffries, C., Lu, C., Murphy, E., Anton, T., Vo, A. H., Xiao, Z., et al. (2024). Building a translational cancer dependency map for The Cancer Genome Atlas. *Nature Cancer, 5*, 1176-1194. https://doi.org/10.1038/s43018-024-00789-y
+- Sun, D., Gao, W., Hu, H., & Zhou, S. (2022). Why 90% of clinical drug development fails and how to improve it? *Acta Pharmaceutica Sinica B, 12*(7), 3049-3062. https://doi.org/10.1016/j.apsb.2022.02.002
+- Tsherniak, A., Vazquez, F., Montgomery, P. G., Weir, B. A., Kryukov, G., Cowley, G. S., Gill, S., Harrington, W. F., Pantel, S., Krill-Burger, J., et al. (2017). Defining a cancer dependency map. *Cell, 170*(3), 564-576. https://doi.org/10.1016/j.cell.2017.06.010

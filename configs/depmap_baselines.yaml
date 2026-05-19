@@ -5,7 +5,8 @@ data:
   metadata_path: data/raw/Model.csv
   modalities:
     expression: data/raw/OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv
-    mutation: data/raw/OmicsSomaticMutationsMatrixDamaging.csv
+    damaging_mutation: data/raw/OmicsSomaticMutationsMatrixDamaging.csv
+    hotspot_mutation: data/raw/OmicsSomaticMutationsMatrixHotspot.csv
     cna: data/raw/PortalOmicsCNGeneLog2.csv
 
 episodes:

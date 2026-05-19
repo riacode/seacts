@@ -8,12 +8,18 @@ The project is designed to download real DepMap files into the `seacts-data` Mod
 modal run modal_data.py
 ```
 
-The minimal raw file subset is:
+The Modal download set is:
 
 - `CRISPRGeneEffect.csv`
 - `Model.csv` or `sample_info.csv`
+- `Gene.csv`
+- `SubtypeMatrix.csv`
+- `SubtypeTree.csv`
 - `OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv`
 - `PortalOmicsCNGeneLog2.csv`
 - `OmicsSomaticMutationsMatrixDamaging.csv`
+- `OmicsSomaticMutationsMatrixHotspot.csv`
+- `OmicsGlobalSignatures.csv`
+- `OmicsInferredMolecularSubtypes.csv`
 
-If running locally, place those files under `data/raw/`. That path is ignored by git.
+The current baseline config uses the gene-aligned matrices: CRISPR gene effect, expression, copy number, damaging mutation, and hotspot mutation. The subtype and global-signature files are downloaded for later context features and analysis. If running locally, place those files under `data/raw/`. That path is ignored by git.
