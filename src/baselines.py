@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from random import Random
+from statistics import mean, pstdev
 from typing import Protocol
 
 import pandas as pd
@@ -67,14 +68,24 @@ class AverageModalityPolicy:
     name: str = "average_all_modalities"
 
     def rank(self, episode: CandidateEpisode) -> list[int]:
-        scores = []
-        for idx, gene in enumerate(episode.candidate_genes):
+        modality_scores: list[list[float | None]] = []
+        for modality in self.modalities.values():
             values = [
                 float(modality.loc[episode.cell_line_id, gene])
-                for modality in self.modalities.values()
                 if pd.notna(modality.loc[episode.cell_line_id, gene])
+                else None
+                for gene in episode.candidate_genes
             ]
-            score = sum(values) / len(values) if values else float("-inf")
+            modality_scores.append(_standardize_observed(values))
+
+        scores: list[tuple[int, float]] = []
+        for idx in range(len(episode.candidate_genes)):
+            values = [
+                modality_score[idx]
+                for modality_score in modality_scores
+                if modality_score[idx] is not None
+            ]
+            score = mean(values) if values else float("-inf")
             scores.append((idx, score))
         return [idx for idx, _ in sorted(scores, key=lambda item: item[1], reverse=True)]
 
@@ -84,6 +95,9 @@ def evaluate_policy(
     episodes: list[CandidateEpisode],
     top_k: int,
 ) -> dict[str, float | str]:
+    if not episodes:
+        raise ValueError("Cannot evaluate a policy on zero episodes.")
+
     rows: list[dict[str, float]] = []
     for episode in episodes:
         ranked = policy.rank(episode)
@@ -101,3 +115,14 @@ def evaluate_policy(
 
     summary = {key: sum(row[key] for row in rows) / len(rows) for key in rows[0]}
     return {"policy": policy.name, **summary}
+
+
+def _standardize_observed(values: list[float | None]) -> list[float | None]:
+    observed = [value for value in values if value is not None]
+    if not observed:
+        return values
+    center = mean(observed)
+    scale = pstdev(observed)
+    if scale == 0.0:
+        return [0.0 if value is not None else None for value in values]
+    return [(value - center) / scale if value is not None else None for value in values]

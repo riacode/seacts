@@ -64,6 +64,12 @@ Download the required DepMap files into the `seacts-data` Modal Volume:
 modal run modal_data.py
 ```
 
+Run the milestone baselines against the Modal data volume and write metrics to the `seacts-results` Modal Volume:
+
+```bash
+modal run modal_baselines.py
+```
+
 The downloader fetches the DepMap manifest fresh from `https://depmap.org/portal/api/download/files`, selects the latest `DepMap Public` release by default, and downloads the dependency matrix, metadata, gene-aligned evidence matrices, and context files needed for the project:
 
 - `CRISPRGeneEffect.csv`
@@ -94,7 +100,7 @@ src/
 scripts/
 └── run_baselines.py
 
-modal_config.py       # Shared Modal app, image, volume, remote functions
+modal_baselines.py    # Modal baseline runner
 modal_data.py         # DepMap download/prep launcher
 ```
 
@@ -126,7 +132,7 @@ Baseline modality matrices should have cell lines as rows and genes as columns. 
 - `random`: random candidate gene selection.
 - `oracle_dependency`: ranks by hidden dependency score as an upper bound.
 - `{modality}_score`: ranks by one modality score.
-- `average_all_modalities`: averages all available modality scores.
+- `average_all_modalities`: averages within-episode standardized modality scores.
 
 Metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal rank at k, and query cost.
 

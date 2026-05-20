@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from src.baselines import AverageModalityPolicy, OraclePolicy, evaluate_policy
+from src.data import load_project_data, read_cell_line_by_gene_matrix
+from src.episodes import CandidateEpisode
+
+
+def test_read_matrix_normalizes_depmap_gene_suffixes(tmp_path: Path) -> None:
+    path = tmp_path / "matrix.csv"
+    pd.DataFrame(
+        {
+            "DepMap_ID": ["ACH-1", "ACH-2"],
+            "SOX10 (6663)": [1.0, 2.0],
+            "BRAF (673)": [3.0, 4.0],
+        }
+    ).to_csv(path, index=False)
+
+    matrix = read_cell_line_by_gene_matrix(path)
+
+    assert matrix.index.tolist() == ["ACH-1", "ACH-2"]
+    assert matrix.columns.tolist() == ["SOX10", "BRAF"]
+
+
+def test_read_matrix_rejects_duplicate_gene_names_after_normalization(tmp_path: Path) -> None:
+    path = tmp_path / "matrix.csv"
+    pd.DataFrame(
+        {
+            "DepMap_ID": ["ACH-1"],
+            "GENE (1)": [1.0],
+            "GENE (2)": [2.0],
+        }
+    ).to_csv(path, index=False)
+
+    with pytest.raises(ValueError, match="duplicate columns"):
+        read_cell_line_by_gene_matrix(path)
+
+
+def test_load_project_data_intersects_normalized_gene_names(tmp_path: Path) -> None:
+    dependency_path = tmp_path / "CRISPRGeneEffect.csv"
+    expression_path = tmp_path / "expression.csv"
+    pd.DataFrame(
+        {
+            "DepMap_ID": ["ACH-1"],
+            "SOX10 (6663)": [-1.0],
+            "BRAF (673)": [0.2],
+        }
+    ).to_csv(dependency_path, index=False)
+    pd.DataFrame(
+        {
+            "DepMap_ID": ["ACH-1"],
+            "SOX10": [5.0],
+            "BRAF": [1.0],
+        }
+    ).to_csv(expression_path, index=False)
+
+    data = load_project_data(dependency_path, {"expression": expression_path})
+
+    assert data.genes == ["BRAF", "SOX10"]
+    assert data.dependency.loc["ACH-1", "SOX10"] == -1.0
+
+
+def test_average_modality_policy_standardizes_modalities_before_averaging() -> None:
+    episode = CandidateEpisode(
+        episode_id=0,
+        cell_line_id="ACH-1",
+        candidate_genes=("A", "B", "C"),
+        dependency_scores=(-1.0, 0.2, 0.3),
+    )
+    high_scale = pd.DataFrame({"A": [1000.0], "B": [900.0], "C": [0.0]}, index=["ACH-1"])
+    low_scale = pd.DataFrame({"A": [0.0], "B": [1.0], "C": [1.0]}, index=["ACH-1"])
+    policy = AverageModalityPolicy({"high": high_scale, "low": low_scale}, query_cost=2.0)
+
+    assert policy.rank(episode)[0] == 1
+
+
+def test_evaluate_policy_rejects_empty_episode_list() -> None:
+    with pytest.raises(ValueError, match="zero episodes"):
+        evaluate_policy(OraclePolicy(), [], top_k=3)

@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from modal_config import app, data_volume, image
+import modal
+
+
+app = modal.App("seacts")
+
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install_from_requirements("requirements.txt")
+    .add_local_python_source("src")
+)
+
+data_volume = modal.Volume.from_name("seacts-data", create_if_missing=True)
 
 
 @app.function(image=image, volumes={"/root/seacts/data": data_volume}, timeout=3600)
@@ -25,7 +36,7 @@ def download_depmap_data(release: str = "latest", overwrite: bool = False) -> li
     ]
 
 
-@app.local_entrypoint()
+@app.local_entrypoint(name="download")
 def main(release: str = "latest", overwrite: bool = False) -> None:
     for row in download_depmap_data.remote(release=release, overwrite=overwrite):
         print(row)

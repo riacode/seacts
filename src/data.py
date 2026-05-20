@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 import pandas as pd
 
 
-CELL_LINE_COLS = ("cell_line_id", "DepMap_ID", "model_id")
-GENE_COLS = ("gene", "gene_symbol", "hugo_symbol")
+CELL_LINE_COLS = ("cell_line_id", "DepMap_ID", "model_id", "ModelID", "modelid")
+GENE_COLS = ("gene", "gene_symbol", "hugo_symbol", "HugoSymbol", "hugo_symbol")
 VALUE_COLS = ("value", "score", "dependency", "effect")
+GENE_ID_SUFFIX = re.compile(r"\s+\(\d+\)$")
 
 
 @dataclass(frozen=True)
@@ -49,8 +51,20 @@ def read_cell_line_by_gene_matrix(path: str | Path) -> pd.DataFrame:
         matrix = frame.set_index(frame.columns[0])
 
     matrix.index = matrix.index.astype(str)
-    matrix.columns = matrix.columns.astype(str)
+    matrix.columns = _normalize_gene_columns(matrix.columns)
     return matrix.apply(pd.to_numeric, errors="coerce")
+
+
+def _normalize_gene_columns(columns: pd.Index) -> pd.Index:
+    normalized = [GENE_ID_SUFFIX.sub("", str(column)).strip() for column in columns]
+    counts = pd.Series(normalized).value_counts()
+    if any(counts > 1):
+        duplicated = sorted(counts[counts > 1].index.tolist())
+        raise ValueError(
+            "Gene column normalization would create duplicate columns. "
+            f"Examples: {duplicated[:10]}"
+        )
+    return pd.Index(normalized)
 
 
 def load_project_data(
