@@ -58,6 +58,12 @@ conda activate seacts
 modal setup
 ```
 
+Create a Modal secret for W&B so baseline runs log to the `seacts` team:
+
+```bash
+modal secret create wandb WANDB_API_KEY=<your-api-key>
+```
+
 Download the required DepMap files into the `seacts-data` Modal Volume:
 
 ```bash
@@ -135,6 +141,8 @@ Baseline modality matrices should have cell lines as rows and genes as columns. 
 - `average_all_modalities`: averages within-episode standardized modality scores.
 
 Metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal rank at k, and query cost.
+
+Baseline runs log to the W&B project `seacts/seacts` when `tracking.wandb.enabled` is true in `configs/depmap_baselines.yaml`.
 
 ## References
 

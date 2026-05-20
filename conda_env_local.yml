@@ -12,4 +12,5 @@ dependencies:
   - pip
   - pip:
       - modal>=1.1
+      - wandb>=0.19
       - -e .

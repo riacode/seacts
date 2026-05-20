@@ -30,11 +30,24 @@ class EvaluationConfig:
 
 
 @dataclass(frozen=True)
+class WandbConfig:
+    enabled: bool
+    entity: str
+    project: str
+
+
+@dataclass(frozen=True)
+class TrackingConfig:
+    wandb: WandbConfig
+
+
+@dataclass(frozen=True)
 class BaselineConfig:
     seed: int
     data: DataConfig
     episodes: EpisodeConfig
     evaluation: EvaluationConfig
+    tracking: TrackingConfig
     output_dir: Path
 
 
@@ -55,6 +68,8 @@ def load_baseline_config(path: str | Path) -> BaselineConfig:
     data = raw["data"]
     episodes = raw["episodes"]
     evaluation = raw["evaluation"]
+    tracking = raw.get("tracking", {})
+    wandb = tracking.get("wandb", {})
 
     return BaselineConfig(
         seed=int(raw.get("seed", 0)),
@@ -76,6 +91,13 @@ def load_baseline_config(path: str | Path) -> BaselineConfig:
         evaluation=EvaluationConfig(
             top_k=int(evaluation.get("top_k", 3)),
             full_query_cost=float(evaluation.get("full_query_cost", 0.0)),
+        ),
+        tracking=TrackingConfig(
+            wandb=WandbConfig(
+                enabled=bool(wandb.get("enabled", False)),
+                entity=str(wandb.get("entity", "seacts")),
+                project=str(wandb.get("project", "seacts")),
+            )
         ),
         output_dir=_resolve_path(config_path, raw.get("output_dir", "outputs/baselines")),
     )

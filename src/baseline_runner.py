@@ -9,6 +9,7 @@ from src.baselines import evaluate_policy
 from src.config import BaselineConfig, load_baseline_config
 from src.data import load_project_data
 from src.episodes import EpisodeBuilder
+from src.tracking import log_baseline_results, wandb_baseline_run
 
 
 def run_baseline_pipeline(
@@ -32,13 +33,16 @@ def run_baseline_pipeline(
     episodes = _build_episodes(config, data.dependency)
     policies = _build_policies(config, data.modalities)
 
-    rows = [evaluate_policy(policy, episodes, top_k=config.evaluation.top_k) for policy in policies]
-    results = pd.DataFrame(rows).sort_values("selected_dependency")
-
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
     output_path = resolved_output_dir / "baseline_metrics.csv"
-    results.to_csv(output_path, index=False)
+
+    with wandb_baseline_run(config, config_path) as wandb_run:
+        rows = [evaluate_policy(policy, episodes, top_k=config.evaluation.top_k) for policy in policies]
+        results = pd.DataFrame(rows).sort_values("selected_dependency")
+        results.to_csv(output_path, index=False)
+        log_baseline_results(wandb_run, results, output_path)
+
     return results, output_path
 
 

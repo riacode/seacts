@@ -20,4 +20,10 @@ evaluation:
   top_k: 3
   full_query_cost: 3.0
 
+tracking:
+  wandb:
+    enabled: true
+    entity: seacts
+    project: seacts
+
 output_dir: outputs/depmap_baselines

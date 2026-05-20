@@ -21,6 +21,7 @@ results_volume = modal.Volume.from_name("seacts-results", create_if_missing=True
 
 @app.function(
     image=image,
+    secrets=[modal.Secret.from_name("wandb")],
     volumes={
         "/root/seacts/data": data_volume,
         "/root/seacts/results": results_volume,
