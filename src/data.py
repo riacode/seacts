@@ -52,7 +52,10 @@ def read_cell_line_by_gene_matrix(path: str | Path) -> pd.DataFrame:
 
     matrix.index = matrix.index.astype(str)
     matrix.columns = _normalize_gene_columns(matrix.columns)
-    return matrix.apply(pd.to_numeric, errors="coerce")
+    matrix = matrix.apply(pd.to_numeric, errors="coerce")
+    if matrix.index.has_duplicates:
+        matrix = matrix.groupby(level=0).mean()
+    return matrix
 
 
 def _normalize_gene_columns(columns: pd.Index) -> pd.Index:

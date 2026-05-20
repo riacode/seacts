@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.baselines import AverageModalityPolicy, OraclePolicy, evaluate_policy
+from src.baselines import AverageModalityPolicy, ModalityScorePolicy, OraclePolicy, evaluate_policy
 from src.data import load_project_data, read_cell_line_by_gene_matrix
 from src.episodes import CandidateEpisode
 
@@ -38,6 +38,21 @@ def test_read_matrix_rejects_duplicate_gene_names_after_normalization(tmp_path: 
 
     with pytest.raises(ValueError, match="duplicate columns"):
         read_cell_line_by_gene_matrix(path)
+
+
+def test_read_matrix_averages_duplicate_cell_line_rows(tmp_path: Path) -> None:
+    path = tmp_path / "matrix.csv"
+    pd.DataFrame(
+        {
+            "DepMap_ID": ["ACH-1", "ACH-1"],
+            "SOX10 (6663)": [1.0, 3.0],
+        }
+    ).to_csv(path, index=False)
+
+    matrix = read_cell_line_by_gene_matrix(path)
+
+    assert matrix.index.tolist() == ["ACH-1"]
+    assert matrix.loc["ACH-1", "SOX10"] == 2.0
 
 
 def test_load_project_data_intersects_normalized_gene_names(tmp_path: Path) -> None:
@@ -76,6 +91,19 @@ def test_average_modality_policy_standardizes_modalities_before_averaging() -> N
     policy = AverageModalityPolicy({"high": high_scale, "low": low_scale}, query_cost=2.0)
 
     assert policy.rank(episode)[0] == 1
+
+
+def test_modality_score_policy_handles_duplicate_lookup_series() -> None:
+    episode = CandidateEpisode(
+        episode_id=0,
+        cell_line_id="ACH-1",
+        candidate_genes=("A", "B"),
+        dependency_scores=(-1.0, 0.2),
+    )
+    modality = pd.DataFrame({"A": [1.0, 3.0], "B": [5.0, 1.0]}, index=["ACH-1", "ACH-1"])
+    policy = ModalityScorePolicy("test", modality, query_cost=1.0)
+
+    assert policy.rank(episode) == [1, 0]
 
 
 def test_evaluate_policy_rejects_empty_episode_list() -> None:

@@ -56,7 +56,7 @@ class ModalityScorePolicy:
     def rank(self, episode: CandidateEpisode) -> list[int]:
         scores = []
         for idx, gene in enumerate(episode.candidate_genes):
-            value = self.modality.loc[episode.cell_line_id, gene]
+            value = _score_value(self.modality, episode.cell_line_id, gene)
             scores.append((idx, float(value) if pd.notna(value) else float("-inf")))
         return [idx for idx, _ in sorted(scores, key=lambda item: item[1], reverse=True)]
 
@@ -71,8 +71,8 @@ class AverageModalityPolicy:
         modality_scores: list[list[float | None]] = []
         for modality in self.modalities.values():
             values = [
-                float(modality.loc[episode.cell_line_id, gene])
-                if pd.notna(modality.loc[episode.cell_line_id, gene])
+                float(value)
+                if pd.notna(value := _score_value(modality, episode.cell_line_id, gene))
                 else None
                 for gene in episode.candidate_genes
             ]
@@ -126,3 +126,14 @@ def _standardize_observed(values: list[float | None]) -> list[float | None]:
     if scale == 0.0:
         return [0.0 if value is not None else None for value in values]
     return [(value - center) / scale if value is not None else None for value in values]
+
+
+def _score_value(modality: pd.DataFrame, cell_line_id: str, gene: str) -> float:
+    value = modality.loc[cell_line_id, gene]
+    if not isinstance(value, pd.Series):
+        return float(value)
+
+    numeric = pd.to_numeric(value, errors="coerce").dropna()
+    if numeric.empty:
+        return float("nan")
+    return float(numeric.mean())
