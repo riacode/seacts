@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from random import Random
 from statistics import mean, pstdev
@@ -218,7 +219,7 @@ def _standardize_observed(values: list[float | None]) -> list[float | None]:
     return [(value - center) / scale if value is not None else None for value in values]
 
 
-def _average_available(values: object) -> float:
+def _average_available(values: Iterable[float | None]) -> float:
     observed = [value for value in values if value is not None]
     if not observed:
         return float("-inf")
