@@ -4,15 +4,15 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.baselines import AverageModalityPolicy, ModalityScorePolicy, OraclePolicy, RandomPolicy
-from src.baselines import evaluate_policy
+from src.data_baselines import AverageModalityPolicy, ModalityScorePolicy, OraclePolicy, RandomPolicy
+from src.data_baselines import evaluate_policy
 from src.config import BaselineConfig, load_baseline_config
 from src.data import load_project_data
 from src.episodes import EpisodeBuilder
 from src.tracking import log_baseline_results, wandb_baseline_run
 
 
-def run_baseline_pipeline(
+def run_data_baseline_pipeline(
     config_path: str | Path,
     raw_data_dir: str | Path | None = None,
     output_dir: str | Path | None = None,
@@ -35,7 +35,7 @@ def run_baseline_pipeline(
 
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = resolved_output_dir / "baseline_metrics.csv"
+    output_path = resolved_output_dir / "data_baseline_metrics.csv"
 
     with wandb_baseline_run(config, config_path) as wandb_run:
         rows = [evaluate_policy(policy, episodes, top_k=config.evaluation.top_k) for policy in policies]

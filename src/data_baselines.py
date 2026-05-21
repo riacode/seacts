@@ -22,7 +22,7 @@ class BaselinePolicy(Protocol):
 @dataclass
 class RandomPolicy:
     seed: int = 0
-    name: str = "random"
+    name: str = "data_random_select"
     query_cost: float = 0.0
 
     def __post_init__(self) -> None:
@@ -36,7 +36,7 @@ class RandomPolicy:
 
 @dataclass
 class OraclePolicy:
-    name: str = "oracle_dependency"
+    name: str = "data_oracle_dependency"
     query_cost: float = 0.0
 
     def rank(self, episode: CandidateEpisode) -> list[int]:
@@ -51,7 +51,7 @@ class ModalityScorePolicy:
 
     @property
     def name(self) -> str:
-        return f"{self.modality_name}_score"
+        return f"data_{self.modality_name}_score"
 
     def rank(self, episode: CandidateEpisode) -> list[int]:
         scores = []
@@ -65,7 +65,7 @@ class ModalityScorePolicy:
 class AverageModalityPolicy:
     modalities: dict[str, pd.DataFrame]
     query_cost: float
-    name: str = "average_all_modalities"
+    name: str = "data_average_all_modalities"
 
     def rank(self, episode: CandidateEpisode) -> list[int]:
         modality_scores: list[list[float | None]] = []

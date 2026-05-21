@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from src.baseline_runner import run_baseline_pipeline
+from src.data_baseline_runner import run_data_baseline_pipeline
 
 
 def parse_args() -> argparse.Namespace:
@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    results, output_path = run_baseline_pipeline(
+    results, output_path = run_data_baseline_pipeline(
         config_path=args.config,
         raw_data_dir=args.raw_data_dir,
         output_dir=args.output_dir,

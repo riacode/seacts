@@ -14,6 +14,7 @@ from src.config import BaselineConfig
 def wandb_baseline_run(
     config: BaselineConfig,
     config_path: str | Path,
+    run_name: str = "data-baselines",
 ) -> Iterator[Any | None]:
     if not config.tracking.wandb.enabled:
         yield None
@@ -30,7 +31,7 @@ def wandb_baseline_run(
     with wandb.init(
         entity=config.tracking.wandb.entity,
         project=config.tracking.wandb.project,
-        name="depmap-baselines",
+        name=run_name,
         job_type="baseline",
         config=_wandb_config(config, config_path),
     ) as run:

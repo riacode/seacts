@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.baselines import AverageModalityPolicy, ModalityScorePolicy, OraclePolicy, evaluate_policy
+from src.data_baselines import AverageModalityPolicy, ModalityScorePolicy, OraclePolicy, evaluate_policy
 from src.data import load_project_data, read_cell_line_by_gene_matrix
 from src.episodes import CandidateEpisode
 

@@ -26,14 +26,15 @@ We train a Deep Q-Network (DQN) to learn a policy over this discrete action spac
 
 ## Milestone Plan
 
-The first milestone is an end-to-end baseline pipeline:
+The first milestone is an end-to-end baseline and environment pipeline:
 
 1. Load DepMap-style dependency and modality matrices.
 2. Build fixed-size candidate gene episodes for each cell line.
-3. Run target-selection baselines.
-4. Report ranking and selected-target metrics.
+3. Run direct data baselines that rank candidates from already-available modality matrices.
+4. Run RL environment baselines that must query evidence through the sequential query/select API.
+5. Report ranking, selected-target, query-cost, and episode-reward metrics.
 
-This gives us the shared data/evaluation surface needed before adding the DQN evidence-acquisition environment.
+This gives us the shared data/evaluation surface and environment API needed before adding the DQN policy.
 
 ## Setup
 
@@ -70,10 +71,16 @@ Download the required DepMap files into the `seacts-data` Modal Volume:
 modal run modal_data.py
 ```
 
-Run the milestone baselines against the Modal data volume and write metrics to the `seacts-results` Modal Volume:
+Run the direct data baselines against the Modal data volume and write metrics to the `seacts-results` Modal Volume:
 
 ```bash
-modal run modal_baselines.py
+modal run modal_data_baselines.py
+```
+
+Run RL environment baselines through the sequential query/select API:
+
+```bash
+modal run modal_environment_baselines.py
 ```
 
 The downloader fetches the DepMap manifest fresh from `https://depmap.org/portal/api/download/files`, selects the latest `DepMap Public` release by default, and downloads the dependency matrix, metadata, gene-aligned evidence matrices, and context files needed for the project:
@@ -96,19 +103,24 @@ The code follows the course assignment style, with implementation code grouped u
 
 ```text
 src/
-├── baselines.py      # Candidate target-selection baselines
-├── config.py         # YAML config loading
-├── data.py           # DepMap-style matrix loading
-├── depmap_files.py   # DepMap manifest filtering and downloads
-├── environment.py    # Sequential evidence-acquisition environment
-├── episodes.py       # Candidate episode construction
-└── metrics.py        # Ranking and selection metrics
+├── config.py                # YAML config loading
+├── data.py                  # DepMap-style matrix loading
+├── data_baseline_runner.py  # Direct data baseline runner
+├── data_baselines.py        # Direct data baseline policies
+├── depmap_files.py          # DepMap manifest filtering and downloads
+├── environment.py           # Sequential evidence-acquisition environment
+├── environment_baselines.py # RL environment baseline policies
+├── environment_runner.py    # RL environment baseline runner
+├── episodes.py              # Candidate episode construction
+└── metrics.py               # Ranking and selection metrics
 
 scripts/
-└── run_baselines.py
+├── run_data_baselines.py
+└── run_environment_baselines.py
 
-modal_baselines.py    # Modal baseline runner
-modal_data.py         # DepMap download/prep launcher
+modal_data.py                  # DepMap download/prep launcher
+modal_data_baselines.py        # Modal data-baseline runner
+modal_environment_baselines.py # Modal environment-baseline runner
 ```
 
 ## Real Data
@@ -134,14 +146,23 @@ The downloader also keeps project context files for later cancer-context feature
 
 Baseline modality matrices should have cell lines as rows and genes as columns. Long-form files with `cell_line_id`, `gene`, and `value` columns are also supported.
 
-## Current Baselines
+## Current Data Baselines
 
-- `random`: random candidate gene selection.
-- `oracle_dependency`: ranks by hidden dependency score as an upper bound.
-- `{modality}_score`: ranks by one modality score.
-- `average_all_modalities`: averages within-episode standardized modality scores.
+- `data_random_select`: random candidate gene selection.
+- `data_oracle_dependency`: ranks by hidden dependency score as an upper bound.
+- `data_{modality}_score`: ranks by one already-available modality score.
+- `data_average_all_modalities`: averages within-episode standardized modality scores.
 
 Metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal rank at k, and query cost.
+
+## Current RL Environment Baselines
+
+- `rl_env_random_select`: selects a random candidate without querying evidence.
+- `rl_env_oracle_select`: selects by hidden dependency as an upper bound.
+- `rl_env_query_{modality}_then_select`: queries one modality for every candidate, then selects by the revealed values.
+- `rl_env_query_all_average_then_select`: queries all modalities for every candidate, then selects by the standardized average of revealed values.
+
+Environment metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal rank at k, query cost, number of queries, and total episode reward.
 
 Baseline runs log to the W&B project `seacts/seacts` when `tracking.wandb.enabled` is true in `configs/depmap_baselines.yaml`.
 

@@ -28,11 +28,11 @@ results_volume = modal.Volume.from_name("seacts-results", create_if_missing=True
     },
     timeout=7200,
 )
-def run_depmap_baselines() -> list[dict[str, str | float]]:
-    from src.baseline_runner import run_baseline_pipeline
+def run_environment_baselines() -> list[dict[str, str | float]]:
+    from src.environment_runner import run_environment_baseline_pipeline
 
     data_volume.reload()
-    results, output_path = run_baseline_pipeline(
+    results, output_path = run_environment_baseline_pipeline(
         config_path="/root/seacts/configs/depmap_baselines.yaml",
         raw_data_dir="/root/seacts/data/raw",
         output_dir="/root/seacts/results/depmap_baselines",
@@ -48,7 +48,7 @@ def run_depmap_baselines() -> list[dict[str, str | float]]:
     ] + [{"output_path": str(output_path)}]
 
 
-@app.local_entrypoint(name="baselines")
+@app.local_entrypoint(name="environment_baselines")
 def main() -> None:
-    for row in run_depmap_baselines.remote():
+    for row in run_environment_baselines.remote():
         print(row)
