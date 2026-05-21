@@ -100,6 +100,7 @@ src/
 ├── config.py         # YAML config loading
 ├── data.py           # DepMap-style matrix loading
 ├── depmap_files.py   # DepMap manifest filtering and downloads
+├── environment.py    # Sequential evidence-acquisition environment
 ├── episodes.py       # Candidate episode construction
 └── metrics.py        # Ranking and selection metrics
 
