@@ -164,6 +164,8 @@ Metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal 
 
 Environment metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal rank at k, query cost, number of queries, and total episode reward.
 
+The RL environment uses normalized query costs from `configs/depmap_baselines.yaml`. These costs are relative burden proxies on the same scale as dependency reward, not literal assay prices. The default values treat already available computational evidence as low-cost while still making exhaustive querying non-free.
+
 Baseline runs log to the W&B project `seacts/seacts` when `tracking.wandb.enabled` is true in `configs/depmap_baselines.yaml`.
 
 ## References

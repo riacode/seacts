@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from src.data_baselines import AverageModalityPolicy, ModalityScorePolicy, OraclePolicy, evaluate_policy
+from src.config import load_baseline_config
 from src.data import load_project_data, read_cell_line_by_gene_matrix
 from src.episodes import CandidateEpisode
 
@@ -109,3 +110,15 @@ def test_modality_score_policy_handles_duplicate_lookup_series() -> None:
 def test_evaluate_policy_rejects_empty_episode_list() -> None:
     with pytest.raises(ValueError, match="zero episodes"):
         evaluate_policy(OraclePolicy(), [], top_k=3)
+
+
+def test_baseline_config_loads_environment_costs() -> None:
+    config = load_baseline_config("configs/depmap_baselines.yaml")
+
+    assert config.environment.query_costs == {
+        "expression": 0.02,
+        "cna": 0.03,
+        "damaging_mutation": 0.04,
+        "hotspot_mutation": 0.04,
+    }
+    assert config.environment.repeated_query_penalty == 0.0

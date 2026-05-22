@@ -76,6 +76,10 @@ def _wandb_config(config: BaselineConfig, config_path: str | Path) -> dict[str, 
             "top_k": config.evaluation.top_k,
             "full_query_cost": config.evaluation.full_query_cost,
         },
+        "environment": {
+            "query_costs": config.environment.query_costs,
+            "repeated_query_penalty": config.environment.repeated_query_penalty,
+        },
         "output_dir": str(config.output_dir),
     }
 

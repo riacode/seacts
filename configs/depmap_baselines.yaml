@@ -20,6 +20,17 @@ evaluation:
   top_k: 3
   full_query_cost: 3.0
 
+environment:
+  # Normalized evidence-acquisition costs on the same scale as dependency reward.
+  # These are relative burden proxies for already available computational evidence,
+  # not literal assay prices.
+  query_costs:
+    expression: 0.02
+    cna: 0.03
+    damaging_mutation: 0.04
+    hotspot_mutation: 0.04
+  repeated_query_penalty: 0.0
+
 tracking:
   wandb:
     enabled: true

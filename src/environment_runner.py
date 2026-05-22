@@ -31,7 +31,11 @@ def run_environment_baseline_pipeline(
         metadata_path=metadata_path,
     )
     episodes = _build_episodes(config, data.dependency)
-    env = EvidenceAcquisitionEnv(data.modalities)
+    env = EvidenceAcquisitionEnv(
+        data.modalities,
+        query_costs=config.environment.query_costs,
+        repeated_query_penalty=config.environment.repeated_query_penalty,
+    )
     policies = build_environment_policies(env.modality_names, seed=config.seed)
 
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)

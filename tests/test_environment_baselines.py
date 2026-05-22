@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from src.environment import EvidenceAcquisitionEnv
 from src.environment_baselines import (
@@ -31,6 +32,14 @@ def _env() -> EvidenceAcquisitionEnv:
     return EvidenceAcquisitionEnv(modalities)
 
 
+def _costed_env() -> EvidenceAcquisitionEnv:
+    modalities = {
+        "expression": pd.DataFrame({"A": [4.0], "B": [2.0], "C": [1.0]}, index=["ACH-1"]),
+        "cna": pd.DataFrame({"A": [0.0], "B": [3.0], "C": [1.0]}, index=["ACH-1"]),
+    }
+    return EvidenceAcquisitionEnv(modalities, query_costs={"expression": 0.2, "cna": 0.5})
+
+
 def test_query_modality_policy_queries_one_modality_for_all_candidates() -> None:
     episode = _episode()
     rollout = QueryModalityPolicy("expression").run(_env(), episode)
@@ -43,12 +52,29 @@ def test_query_modality_policy_queries_one_modality_for_all_candidates() -> None
     assert rollout.total_reward == -2.0
 
 
+def test_query_modality_policy_uses_configured_query_costs() -> None:
+    episode = _episode()
+    rollout = QueryModalityPolicy("expression").run(_costed_env(), episode)
+
+    assert rollout.query_cost == pytest.approx(0.6)
+    assert rollout.n_queries == 3
+    assert rollout.total_reward == pytest.approx(0.4)
+
+
 def test_query_all_average_policy_queries_every_pair() -> None:
     episode = _episode()
     rollout = QueryAllAveragePolicy().run(_env(), episode)
 
     assert rollout.selected_index in {0, 1}
     assert rollout.query_cost == 6.0
+    assert rollout.n_queries == 6
+
+
+def test_query_all_average_policy_uses_modality_specific_costs() -> None:
+    episode = _episode()
+    rollout = QueryAllAveragePolicy().run(_costed_env(), episode)
+
+    assert rollout.query_cost == pytest.approx(2.1)
     assert rollout.n_queries == 6
 
 

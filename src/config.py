@@ -30,6 +30,12 @@ class EvaluationConfig:
 
 
 @dataclass(frozen=True)
+class EnvironmentConfig:
+    query_costs: dict[str, float]
+    repeated_query_penalty: float
+
+
+@dataclass(frozen=True)
 class WandbConfig:
     enabled: bool
     entity: str
@@ -47,6 +53,7 @@ class BaselineConfig:
     data: DataConfig
     episodes: EpisodeConfig
     evaluation: EvaluationConfig
+    environment: EnvironmentConfig
     tracking: TrackingConfig
     output_dir: Path
 
@@ -68,6 +75,7 @@ def load_baseline_config(path: str | Path) -> BaselineConfig:
     data = raw["data"]
     episodes = raw["episodes"]
     evaluation = raw["evaluation"]
+    environment = raw.get("environment", {})
     tracking = raw.get("tracking", {})
     wandb = tracking.get("wandb", {})
 
@@ -91,6 +99,13 @@ def load_baseline_config(path: str | Path) -> BaselineConfig:
         evaluation=EvaluationConfig(
             top_k=int(evaluation.get("top_k", 3)),
             full_query_cost=float(evaluation.get("full_query_cost", 0.0)),
+        ),
+        environment=EnvironmentConfig(
+            query_costs={
+                name: float(value)
+                for name, value in environment.get("query_costs", {}).items()
+            },
+            repeated_query_penalty=float(environment.get("repeated_query_penalty", 0.0)),
         ),
         tracking=TrackingConfig(
             wandb=WandbConfig(
