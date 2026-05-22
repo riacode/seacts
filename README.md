@@ -83,6 +83,12 @@ Run RL environment baselines through the sequential query/select API:
 modal run modal_environment_baselines.py
 ```
 
+Plot the saved data and environment baseline results and log the figures to W&B:
+
+```bash
+modal run modal_visualizations.py
+```
+
 The downloader fetches the DepMap manifest fresh from `https://depmap.org/portal/api/download/files`, selects the latest `DepMap Public` release by default, and downloads the dependency matrix, metadata, gene-aligned evidence matrices, and context files needed for the project:
 
 - `CRISPRGeneEffect.csv`
@@ -115,12 +121,14 @@ src/
 └── metrics.py               # Ranking and selection metrics
 
 scripts/
+├── plot_baseline_results.py
 ├── run_data_baselines.py
 └── run_environment_baselines.py
 
 modal_data.py                  # DepMap download/prep launcher
 modal_data_baselines.py        # Modal data-baseline runner
 modal_environment_baselines.py # Modal environment-baseline runner
+modal_visualizations.py        # Modal plotting runner
 ```
 
 ## Real Data
