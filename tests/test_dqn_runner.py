@@ -57,6 +57,8 @@ def test_train_and_evaluate_dqn_on_tiny_environment() -> None:
             hidden_dim=16,
             batch_size=2,
             replay_capacity=20,
+            learning_starts=2,
+            train_frequency=1,
             target_update_steps=2,
             max_steps_per_episode=3,
             epsilon_decay_steps=1,
@@ -130,10 +132,25 @@ def test_epsilon_exploration_can_prioritize_select_actions() -> None:
     assert action in {2, 3}
 
 
+def test_rl_training_config_uses_stable_dqn_defaults() -> None:
+    config = RLTrainingConfig()
+
+    assert config.learning_rate == 0.0001
+    assert config.learning_starts == 500
+    assert config.train_frequency == 4
+    assert config.target_update_steps == 500
+    assert config.max_grad_norm == 10.0
+    assert config.validation_interval == 50
+
+
 def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Path) -> None:
     logged: list[tuple[dict, int | None]] = []
+    summary: dict[str, float] = {}
 
     class FakeRun:
+        def __init__(self) -> None:
+            self.summary = summary
+
         def __enter__(self):
             return self
 
@@ -202,3 +219,4 @@ def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Pat
             3,
         ),
     ]
+    assert summary == {"eval/total_reward": 0.5}

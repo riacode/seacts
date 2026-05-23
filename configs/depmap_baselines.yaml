@@ -34,17 +34,22 @@ environment:
 rl_training:
   train_episodes: 1000
   eval_episodes: 500
+  validation_episodes: 100
   hidden_dim: 128
-  learning_rate: 0.001
+  learning_rate: 0.0001
   gamma: 0.95
   batch_size: 64
   replay_capacity: 20000
-  target_update_steps: 200
+  learning_starts: 500
+  train_frequency: 4
+  target_update_steps: 500
+  max_grad_norm: 10.0
   epsilon_start: 1.0
   epsilon_end: 0.05
   epsilon_decay_steps: 2000
   max_steps_per_episode: 32
   select_exploration_probability: 0.5
+  validation_interval: 50
   wandb_log_interval: 10
 
 tracking:

@@ -12,16 +12,20 @@ from src.replay_buffer import Transition
 @dataclass(frozen=True)
 class DQNHyperparameters:
     hidden_dim: int = 128
-    learning_rate: float = 0.001
+    learning_rate: float = 0.0001
     gamma: float = 0.95
     batch_size: int = 64
     replay_capacity: int = 20_000
-    target_update_steps: int = 200
+    learning_starts: int = 500
+    train_frequency: int = 4
+    target_update_steps: int = 500
+    max_grad_norm: float = 10.0
     epsilon_start: float = 1.0
     epsilon_end: float = 0.05
     epsilon_decay_steps: int = 2_000
     max_steps_per_episode: int = 32
     select_exploration_probability: float = 0.5
+    validation_interval: int = 50
 
 
 def build_q_network(state_size: int, action_size: int, hidden_dim: int) -> Any:
@@ -78,8 +82,9 @@ def optimize_dqn_batch(
     optimizer: Any,
     transitions: list[Transition],
     gamma: float,
+    max_grad_norm: float | None = None,
 ) -> float:
-    torch, _, functional = _torch_modules()
+    torch, nn, functional = _torch_modules()
 
     states = torch.as_tensor(np.stack([item.state for item in transitions]), dtype=torch.float32)
     actions = torch.as_tensor([item.action for item in transitions], dtype=torch.int64).unsqueeze(1)
@@ -106,6 +111,8 @@ def optimize_dqn_batch(
     loss = functional.smooth_l1_loss(current_q, expected_q)
     optimizer.zero_grad()
     loss.backward()
+    if max_grad_norm is not None and max_grad_norm > 0.0:
+        nn.utils.clip_grad_norm_(q_network.parameters(), max_grad_norm)
     optimizer.step()
     return float(loss.detach().cpu().item())
 

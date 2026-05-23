@@ -32,17 +32,22 @@ from src.state_encoder import StateEncoder
 class RLTrainingConfig:
     train_episodes: int = 1_000
     eval_episodes: int = 500
+    validation_episodes: int = 100
     hidden_dim: int = 128
-    learning_rate: float = 0.001
+    learning_rate: float = 0.0001
     gamma: float = 0.95
     batch_size: int = 64
     replay_capacity: int = 20_000
-    target_update_steps: int = 200
+    learning_starts: int = 500
+    train_frequency: int = 4
+    target_update_steps: int = 500
+    max_grad_norm: float = 10.0
     epsilon_start: float = 1.0
     epsilon_end: float = 0.05
     epsilon_decay_steps: int = 2_000
     max_steps_per_episode: int = 32
     select_exploration_probability: float = 0.5
+    validation_interval: int = 50
     wandb_log_interval: int = 10
 
     @property
@@ -53,12 +58,16 @@ class RLTrainingConfig:
             gamma=self.gamma,
             batch_size=self.batch_size,
             replay_capacity=self.replay_capacity,
+            learning_starts=self.learning_starts,
+            train_frequency=self.train_frequency,
             target_update_steps=self.target_update_steps,
+            max_grad_norm=self.max_grad_norm,
             epsilon_start=self.epsilon_start,
             epsilon_end=self.epsilon_end,
             epsilon_decay_steps=self.epsilon_decay_steps,
             max_steps_per_episode=self.max_steps_per_episode,
             select_exploration_probability=self.select_exploration_probability,
+            validation_interval=self.validation_interval,
         )
 
 
@@ -88,6 +97,12 @@ def run_dqn_training_pipeline(
         rl_config.eval_episodes,
         config.seed + 1,
     )
+    validation_episodes = _build_episode_set(
+        config,
+        data.dependency,
+        rl_config.validation_episodes,
+        config.seed + 2,
+    )
 
     env = EvidenceAcquisitionEnv(
         data.modalities,
@@ -104,6 +119,8 @@ def run_dqn_training_pipeline(
         encoder=encoder,
         hyperparameters=rl_config.hyperparameters,
         seed=config.seed,
+        validation_episodes=validation_episodes,
+        top_k=config.evaluation.top_k,
     )
 
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
@@ -136,12 +153,16 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
     return RLTrainingConfig(
         train_episodes=int(training.get("train_episodes", 1_000)),
         eval_episodes=int(training.get("eval_episodes", 500)),
+        validation_episodes=int(training.get("validation_episodes", 100)),
         hidden_dim=int(training.get("hidden_dim", 128)),
-        learning_rate=float(training.get("learning_rate", 0.001)),
+        learning_rate=float(training.get("learning_rate", 0.0001)),
         gamma=float(training.get("gamma", 0.95)),
         batch_size=int(training.get("batch_size", 64)),
         replay_capacity=int(training.get("replay_capacity", 20_000)),
-        target_update_steps=int(training.get("target_update_steps", 200)),
+        learning_starts=int(training.get("learning_starts", 500)),
+        train_frequency=int(training.get("train_frequency", 4)),
+        target_update_steps=int(training.get("target_update_steps", 500)),
+        max_grad_norm=float(training.get("max_grad_norm", 10.0)),
         epsilon_start=float(training.get("epsilon_start", 1.0)),
         epsilon_end=float(training.get("epsilon_end", 0.05)),
         epsilon_decay_steps=int(training.get("epsilon_decay_steps", 2_000)),
@@ -149,6 +170,7 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         select_exploration_probability=float(
             training.get("select_exploration_probability", 0.5)
         ),
+        validation_interval=int(training.get("validation_interval", 50)),
         wandb_log_interval=int(training.get("wandb_log_interval", 10)),
     )
 
@@ -159,6 +181,8 @@ def train_dqn_agent(
     encoder: StateEncoder,
     hyperparameters: DQNHyperparameters,
     seed: int,
+    validation_episodes: list[CandidateEpisode] | None = None,
+    top_k: int = 3,
 ) -> tuple[Any, list[dict[str, float | int]]]:
     if not episodes:
         raise ValueError("Cannot train DQN on zero episodes.")
@@ -181,6 +205,8 @@ def train_dqn_agent(
     rng = Random(seed)
     history: list[dict[str, float | int]] = []
     global_step = 0
+    best_validation_reward = float("-inf")
+    best_state_dict: dict[str, Any] | None = None
 
     for episode_number, episode in enumerate(episodes):
         state = env.reset(episode)
@@ -223,13 +249,17 @@ def train_dqn_agent(
             state = result.state
             global_step += 1
 
-            if len(replay) >= hyperparameters.batch_size:
+            if (
+                len(replay) >= max(hyperparameters.batch_size, hyperparameters.learning_starts)
+                and global_step % max(hyperparameters.train_frequency, 1) == 0
+            ):
                 loss = optimize_dqn_batch(
                     q_network,
                     target_network,
                     optimizer,
                     replay.sample(hyperparameters.batch_size),
                     hyperparameters.gamma,
+                    max_grad_norm=hyperparameters.max_grad_norm,
                 )
                 losses.append(loss)
 
@@ -238,15 +268,37 @@ def train_dqn_agent(
             if result.done:
                 break
 
-        history.append(
-            {
-                "episode": episode_number,
-                "total_reward": total_reward,
-                "n_queries": query_count,
-                "epsilon": epsilon_by_step(global_step, hyperparameters),
-                "loss": mean(losses) if losses else 0.0,
-            }
-        )
+        row: dict[str, float | int] = {
+            "episode": episode_number,
+            "total_reward": total_reward,
+            "n_queries": query_count,
+            "epsilon": epsilon_by_step(global_step, hyperparameters),
+            "loss": mean(losses) if losses else 0.0,
+        }
+        if _should_validate(episode_number, len(episodes), hyperparameters, validation_episodes):
+            validation = evaluate_dqn_agent(
+                q_network=q_network,
+                env=env,
+                episodes=validation_episodes or [],
+                encoder=encoder,
+                top_k=top_k,
+                max_steps_per_episode=hyperparameters.max_steps_per_episode,
+            ).iloc[0]
+            row.update(
+                {
+                    "validation_total_reward": float(validation["total_reward"]),
+                    "validation_n_queries": float(validation["n_queries"]),
+                    "validation_selected_dependency": float(validation["selected_dependency"]),
+                    "validation_hit_at_k": float(validation["hit_at_k"]),
+                }
+            )
+            if row["validation_total_reward"] > best_validation_reward:
+                best_validation_reward = float(row["validation_total_reward"])
+                best_state_dict = _clone_state_dict(q_network)
+        history.append(row)
+
+    if best_state_dict is not None:
+        q_network.load_state_dict(best_state_dict)
     return q_network, history
 
 
@@ -367,6 +419,22 @@ def _select_only_mask(encoder: StateEncoder) -> np.ndarray:
     return mask
 
 
+def _should_validate(
+    episode_number: int,
+    n_train_episodes: int,
+    hyperparameters: DQNHyperparameters,
+    validation_episodes: list[CandidateEpisode] | None,
+) -> bool:
+    if not validation_episodes:
+        return False
+    interval = max(hyperparameters.validation_interval, 1)
+    return (episode_number + 1) % interval == 0 or episode_number == n_train_episodes - 1
+
+
+def _clone_state_dict(q_network: Any) -> dict[str, Any]:
+    return {key: value.detach().clone() for key, value in q_network.state_dict().items()}
+
+
 def _load_training_data(config: BaselineConfig, raw_data_dir: str | Path | None):
     dependency_path = _resolve_data_path(config.data.dependency_path, raw_data_dir)
     metadata_path = _resolve_optional_data_path(config.data.metadata_path, raw_data_dir)
@@ -444,6 +512,18 @@ def _log_dqn_to_wandb(
                     },
                     step=episode,
                 )
+                if "validation_total_reward" in row:
+                    run.log(
+                        {
+                            "validation/total_reward": row["validation_total_reward"],
+                            "validation/n_queries": row["validation_n_queries"],
+                            "validation/selected_dependency": row[
+                                "validation_selected_dependency"
+                            ],
+                            "validation/hit_at_k": row["validation_hit_at_k"],
+                        },
+                        step=episode,
+                    )
             run.log(
                 {
                     "train/final_total_reward": training_history[-1]["total_reward"],
@@ -457,7 +537,7 @@ def _log_dqn_to_wandb(
             for key, value in row.items():
                 if key != "policy":
                     eval_metrics[f"eval/{key}"] = value
-        run.log(eval_metrics)
+        run.summary.update(eval_metrics)
         run.log({"dqn_eval_metrics": wandb.Table(dataframe=results)})
         run.save(str(model_path))
 
