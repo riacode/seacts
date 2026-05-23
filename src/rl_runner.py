@@ -48,6 +48,8 @@ class RLTrainingConfig:
     max_steps_per_episode: int = 32
     select_exploration_probability: float = 0.5
     validation_interval: int = 50
+    expert_seed_episodes: int = 200
+    expert_seed_modality: str = "expression"
     wandb_log_interval: int = 10
 
     @property
@@ -68,6 +70,8 @@ class RLTrainingConfig:
             max_steps_per_episode=self.max_steps_per_episode,
             select_exploration_probability=self.select_exploration_probability,
             validation_interval=self.validation_interval,
+            expert_seed_episodes=self.expert_seed_episodes,
+            expert_seed_modality=self.expert_seed_modality,
         )
 
 
@@ -171,6 +175,8 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
             training.get("select_exploration_probability", 0.5)
         ),
         validation_interval=int(training.get("validation_interval", 50)),
+        expert_seed_episodes=int(training.get("expert_seed_episodes", 200)),
+        expert_seed_modality=str(training.get("expert_seed_modality", "expression")),
         wandb_log_interval=int(training.get("wandb_log_interval", 10)),
     )
 
@@ -204,7 +210,14 @@ def train_dqn_agent(
     replay = ReplayBuffer(hyperparameters.replay_capacity, seed=seed)
     rng = Random(seed)
     history: list[dict[str, float | int]] = []
-    global_step = 0
+    expert_seeded = seed_replay_with_modality_expert(
+        replay=replay,
+        env=env,
+        episodes=episodes[: hyperparameters.expert_seed_episodes],
+        encoder=encoder,
+        modality_name=hyperparameters.expert_seed_modality,
+    )
+    global_step = expert_seeded
     best_validation_reward = float("-inf")
     best_state_dict: dict[str, Any] | None = None
 
@@ -419,6 +432,66 @@ def _select_only_mask(encoder: StateEncoder) -> np.ndarray:
     return mask
 
 
+def seed_replay_with_modality_expert(
+    replay: ReplayBuffer,
+    env: EvidenceAcquisitionEnv,
+    episodes: list[CandidateEpisode],
+    encoder: StateEncoder,
+    modality_name: str,
+) -> int:
+    if not episodes:
+        return 0
+    try:
+        modality_index = env.modality_names.index(modality_name)
+    except ValueError:
+        return 0
+
+    n_transitions = 0
+    for episode in episodes:
+        state = env.reset(episode)
+        observed_scores: list[float] = []
+        for gene_index in range(len(episode.candidate_genes)):
+            state_vector = encoder.encode(state)
+            action = env.query_action(gene_index, modality_index)
+            result = env.step(action)
+            replay.append(
+                Transition(
+                    state=state_vector,
+                    action=encoder.action_space.to_index(action),
+                    reward=result.reward,
+                    next_state=encoder.encode(result.state),
+                    next_valid_actions=encoder.valid_action_mask(result.state),
+                    done=result.done,
+                )
+            )
+            observed_scores.append(_rank_value(result.state.observed_values[gene_index][modality_index]))
+            state = result.state
+            n_transitions += 1
+
+        selected_index = int(np.argmax(np.asarray(observed_scores, dtype=np.float32)))
+        state_vector = encoder.encode(state)
+        action = env.select_action(selected_index)
+        result = env.step(action)
+        replay.append(
+            Transition(
+                state=state_vector,
+                action=encoder.action_space.to_index(action),
+                reward=result.reward,
+                next_state=encoder.encode(result.state),
+                next_valid_actions=encoder.valid_action_mask(result.state),
+                done=result.done,
+            )
+        )
+        n_transitions += 1
+    return n_transitions
+
+
+def _rank_value(value: float | None) -> float:
+    if value is None or pd.isna(value):
+        return float("-inf")
+    return float(value)
+
+
 def _should_validate(
     episode_number: int,
     n_train_episodes: int,
@@ -524,7 +597,7 @@ def _log_dqn_to_wandb(
                         },
                         step=episode,
                     )
-            run.log(
+            run.summary.update(
                 {
                     "train/final_total_reward": training_history[-1]["total_reward"],
                     "train/final_n_queries": training_history[-1]["n_queries"],

@@ -12,8 +12,14 @@ import pytest
 from src.dqn import DQNHyperparameters, optimize_dqn_batch, select_epsilon_greedy_action
 from src.environment import EvidenceAcquisitionEnv
 from src.episodes import CandidateEpisode
-from src.replay_buffer import Transition
-from src.rl_runner import RLTrainingConfig, _log_dqn_to_wandb, evaluate_dqn_agent, train_dqn_agent
+from src.replay_buffer import ReplayBuffer, Transition
+from src.rl_runner import (
+    RLTrainingConfig,
+    _log_dqn_to_wandb,
+    evaluate_dqn_agent,
+    seed_replay_with_modality_expert,
+    train_dqn_agent,
+)
 from src.state_encoder import StateEncoder
 
 
@@ -141,6 +147,27 @@ def test_rl_training_config_uses_stable_dqn_defaults() -> None:
     assert config.target_update_steps == 500
     assert config.max_grad_norm == 10.0
     assert config.validation_interval == 50
+    assert config.expert_seed_episodes == 200
+    assert config.expert_seed_modality == "expression"
+
+
+def test_seed_replay_with_modality_expert_adds_query_and_select_transitions() -> None:
+    env = _env()
+    encoder = StateEncoder(n_genes=2, n_modalities=1)
+    replay = ReplayBuffer(capacity=10, seed=0)
+
+    n_transitions = seed_replay_with_modality_expert(
+        replay=replay,
+        env=env,
+        episodes=[_episodes()[0]],
+        encoder=encoder,
+        modality_name="expression",
+    )
+
+    assert n_transitions == 3
+    assert len(replay) == 3
+    transitions = replay.sample(3)
+    assert sum(transition.done for transition in transitions) == 1
 
 
 def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Path) -> None:
@@ -219,4 +246,10 @@ def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Pat
             3,
         ),
     ]
-    assert summary == {"eval/total_reward": 0.5}
+    assert summary == {
+        "train/final_total_reward": 0.4,
+        "train/final_n_queries": 4,
+        "train/final_epsilon": 0.7,
+        "train/final_loss": 0.5,
+        "eval/total_reward": 0.5,
+    }

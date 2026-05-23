@@ -50,6 +50,8 @@ rl_training:
   max_steps_per_episode: 32
   select_exploration_probability: 0.5
   validation_interval: 50
+  expert_seed_episodes: 200
+  expert_seed_modality: expression
   wandb_log_interval: 10
 
 tracking:

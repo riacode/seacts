@@ -26,6 +26,8 @@ class DQNHyperparameters:
     max_steps_per_episode: int = 32
     select_exploration_probability: float = 0.5
     validation_interval: int = 50
+    expert_seed_episodes: int = 200
+    expert_seed_modality: str = "expression"
 
 
 def build_q_network(state_size: int, action_size: int, hidden_dim: int) -> Any:
