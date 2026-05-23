@@ -21,6 +21,7 @@ class DQNHyperparameters:
     epsilon_end: float = 0.05
     epsilon_decay_steps: int = 2_000
     max_steps_per_episode: int = 32
+    select_exploration_probability: float = 0.5
 
 
 def build_q_network(state_size: int, action_size: int, hidden_dim: int) -> Any:
@@ -40,11 +41,19 @@ def select_epsilon_greedy_action(
     valid_actions: np.ndarray,
     epsilon: float,
     rng: Random,
+    select_action_indices: np.ndarray | None = None,
+    select_exploration_probability: float = 0.0,
 ) -> int:
     valid_indices = np.flatnonzero(valid_actions)
     if len(valid_indices) == 0:
         raise ValueError("No valid actions are available.")
     if rng.random() < epsilon:
+        valid_select_indices = _valid_select_indices(valid_actions, select_action_indices)
+        if (
+            len(valid_select_indices) > 0
+            and rng.random() < select_exploration_probability
+        ):
+            return int(rng.choice(valid_select_indices.tolist()))
         return int(rng.choice(valid_indices.tolist()))
     return select_greedy_action(q_network, state, valid_actions)
 
@@ -108,6 +117,18 @@ def epsilon_by_step(step: int, hyperparameters: DQNHyperparameters) -> float:
     return (
         hyperparameters.epsilon_start
         + progress * (hyperparameters.epsilon_end - hyperparameters.epsilon_start)
+    )
+
+
+def _valid_select_indices(
+    valid_actions: np.ndarray,
+    select_action_indices: np.ndarray | None,
+) -> np.ndarray:
+    if select_action_indices is None:
+        return np.array([], dtype=np.int64)
+    return np.asarray(
+        [index for index in select_action_indices if valid_actions[int(index)]],
+        dtype=np.int64,
     )
 
 

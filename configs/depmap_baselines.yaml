@@ -44,6 +44,7 @@ rl_training:
   epsilon_end: 0.05
   epsilon_decay_steps: 2000
   max_steps_per_episode: 32
+  select_exploration_probability: 0.5
   wandb_log_interval: 10
 
 tracking:

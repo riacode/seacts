@@ -42,6 +42,7 @@ class RLTrainingConfig:
     epsilon_end: float = 0.05
     epsilon_decay_steps: int = 2_000
     max_steps_per_episode: int = 32
+    select_exploration_probability: float = 0.5
     wandb_log_interval: int = 10
 
     @property
@@ -57,6 +58,7 @@ class RLTrainingConfig:
             epsilon_end=self.epsilon_end,
             epsilon_decay_steps=self.epsilon_decay_steps,
             max_steps_per_episode=self.max_steps_per_episode,
+            select_exploration_probability=self.select_exploration_probability,
         )
 
 
@@ -144,6 +146,9 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         epsilon_end=float(training.get("epsilon_end", 0.05)),
         epsilon_decay_steps=int(training.get("epsilon_decay_steps", 2_000)),
         max_steps_per_episode=int(training.get("max_steps_per_episode", 32)),
+        select_exploration_probability=float(
+            training.get("select_exploration_probability", 0.5)
+        ),
         wandb_log_interval=int(training.get("wandb_log_interval", 10)),
     )
 
@@ -195,6 +200,8 @@ def train_dqn_agent(
                 valid_actions,
                 epsilon,
                 rng,
+                select_action_indices=encoder.action_space.select_indices(),
+                select_exploration_probability=hyperparameters.select_exploration_probability,
             )
             action = encoder.action_space.from_index(action_index)
             result = env.step(action)

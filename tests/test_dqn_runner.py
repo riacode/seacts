@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from random import Random
 from types import SimpleNamespace
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from src.dqn import DQNHyperparameters, optimize_dqn_batch
+from src.dqn import DQNHyperparameters, optimize_dqn_batch, select_epsilon_greedy_action
 from src.environment import EvidenceAcquisitionEnv
 from src.episodes import CandidateEpisode
 from src.replay_buffer import Transition
@@ -109,6 +111,23 @@ def test_optimize_dqn_batch_uses_double_dqn_target_selection() -> None:
     )
 
     assert loss == pytest.approx(0.5)
+
+
+def test_epsilon_exploration_can_prioritize_select_actions() -> None:
+    torch = pytest.importorskip("torch")
+    network = torch.nn.Linear(1, 4)
+
+    action = select_epsilon_greedy_action(
+        q_network=network,
+        state=np.array([0.0], dtype=np.float32),
+        valid_actions=np.array([True, True, True, True]),
+        epsilon=1.0,
+        rng=Random(0),
+        select_action_indices=np.array([2, 3]),
+        select_exploration_probability=1.0,
+    )
+
+    assert action in {2, 3}
 
 
 def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Path) -> None:
