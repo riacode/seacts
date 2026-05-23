@@ -9,6 +9,7 @@ from src.config import load_baseline_config
 from src.data import load_project_data
 from src.environment import EvidenceAcquisitionEnv
 from src.environment_baselines import build_environment_policies, evaluate_environment_policy
+from src.modality_scores import build_supervised_modality_scores
 from src.tracking import log_baseline_results, wandb_baseline_run
 
 
@@ -24,15 +25,23 @@ def run_environment_baseline_pipeline(
         name: _resolve_data_path(path, raw_data_dir)
         for name, path in config.data.modalities.items()
     }
-
     data = load_project_data(
         dependency_path=dependency_path,
         modality_paths=modality_paths,
         metadata_path=metadata_path,
     )
     episodes = _build_episodes(config, data.dependency)
+    modalities = (
+        build_supervised_modality_scores(
+            data.dependency,
+            data.modalities,
+            train_cell_lines={episode.cell_line_id for episode in episodes},
+        )
+        if config.environment.use_supervised_modality_scores
+        else data.modalities
+    )
     env = EvidenceAcquisitionEnv(
-        data.modalities,
+        modalities,
         query_costs=config.environment.query_costs,
         repeated_query_penalty=config.environment.repeated_query_penalty,
     )

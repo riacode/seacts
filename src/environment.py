@@ -188,7 +188,6 @@ class EvidenceAcquisitionEnv:
         if not 0 <= modality_index < len(self.modality_names):
             raise IndexError(f"modality_index {modality_index} is out of range.")
 
-
 def _modality_value(modality: pd.DataFrame, cell_line_id: str, gene: str) -> float:
     value = modality.loc[cell_line_id, gene]
     if not isinstance(value, pd.Series):

@@ -30,6 +30,7 @@ def plot_baseline_results() -> list[str]:
         data_metrics_path="/root/seacts/results/depmap_baselines/data_baseline_metrics.csv",
         environment_metrics_path="/root/seacts/results/depmap_baselines/environment_baseline_metrics.csv",
         dqn_metrics_path="/root/seacts/results/depmap_baselines/dqn_eval_metrics.csv",
+        dqn_trajectory_path="/root/seacts/results/depmap_baselines/dqn_trajectory_metrics.csv",
         output_dir="/root/seacts/results/figures",
     )
     with wandb.init(

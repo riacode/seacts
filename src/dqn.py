@@ -22,11 +22,11 @@ class DQNHyperparameters:
     max_grad_norm: float = 10.0
     epsilon_start: float = 1.0
     epsilon_end: float = 0.05
-    epsilon_decay_steps: int = 10_000
+    epsilon_decay_steps: int = 20_000
     max_steps_per_episode: int = 32
-    select_exploration_probability: float = 0.5
+    select_exploration_probability: float = 0.25
     validation_interval: int = 100
-    expert_seed_episodes: int = 200
+    expert_seed_episodes: int = 1_000
     expert_seed_modality: str = "expression"
 
 

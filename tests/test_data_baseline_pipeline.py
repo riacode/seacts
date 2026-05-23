@@ -56,6 +56,25 @@ def test_read_matrix_averages_duplicate_cell_line_rows(tmp_path: Path) -> None:
     assert matrix.loc["ACH-1", "SOX10"] == 2.0
 
 
+def test_read_matrix_filters_default_omics_rows_and_drops_id_columns(tmp_path: Path) -> None:
+    path = tmp_path / "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv"
+    pd.DataFrame(
+        {
+            "ModelID": ["ACH-1", "ACH-1", "ACH-2"],
+            "ModelConditionID": ["MC-1", "MC-2", "MC-3"],
+            "SequencingID": ["CDS-1", "CDS-2", "CDS-3"],
+            "IsDefaultEntryForModel": ["No", "Yes", "Yes"],
+            "SOX10 (6663)": [100.0, 2.0, 4.0],
+        }
+    ).to_csv(path, index=False)
+
+    matrix = read_cell_line_by_gene_matrix(path)
+
+    assert matrix.index.tolist() == ["ACH-1", "ACH-2"]
+    assert matrix.columns.tolist() == ["SOX10"]
+    assert matrix.loc["ACH-1", "SOX10"] == 2.0
+
+
 def test_load_project_data_intersects_normalized_gene_names(tmp_path: Path) -> None:
     dependency_path = tmp_path / "CRISPRGeneEffect.csv"
     expression_path = tmp_path / "expression.csv"
@@ -115,6 +134,7 @@ def test_evaluate_policy_rejects_empty_episode_list() -> None:
 def test_baseline_config_loads_environment_costs() -> None:
     config = load_baseline_config("configs/depmap_baselines.yaml")
 
+    assert config.environment.use_supervised_modality_scores
     assert config.environment.query_costs == {
         "expression": 0.02,
         "cna": 0.03,

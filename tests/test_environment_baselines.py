@@ -7,6 +7,7 @@ from src.environment import EvidenceAcquisitionEnv
 from src.environment_baselines import (
     OracleSelectPolicy,
     QueryAllAveragePolicy,
+    QueryModalityBudgetPolicy,
     QueryModalityPolicy,
     RandomSelectPolicy,
     build_environment_policies,
@@ -61,6 +62,17 @@ def test_query_modality_policy_uses_configured_query_costs() -> None:
     assert rollout.total_reward == pytest.approx(0.4)
 
 
+def test_query_modality_budget_policy_queries_subset_of_candidates() -> None:
+    episode = _episode()
+    rollout = QueryModalityBudgetPolicy("expression", query_budget=2).run(_costed_env(), episode)
+
+    assert rollout.ranked_indices == (0, 1, 2)
+    assert rollout.selected_index == 0
+    assert rollout.query_cost == pytest.approx(0.4)
+    assert rollout.n_queries == 2
+    assert rollout.total_reward == pytest.approx(0.6)
+
+
 def test_query_all_average_policy_queries_every_pair() -> None:
     episode = _episode()
     rollout = QueryAllAveragePolicy().run(_env(), episode)
@@ -112,6 +124,9 @@ def test_build_environment_policies_matches_modalities() -> None:
         "rl_env_oracle_select",
         "rl_env_query_expression_then_select",
         "rl_env_query_cna_then_select",
+        "rl_env_query_expression_budget_4_then_select",
+        "rl_env_query_expression_budget_8_then_select",
+        "rl_env_query_expression_budget_12_then_select",
         "rl_env_query_all_average_then_select",
     ]
     assert isinstance(policies[0], RandomSelectPolicy)

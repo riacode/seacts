@@ -24,17 +24,48 @@ The agent can take two types of actions: querying a modality for a specific gene
 
 We train a Deep Q-Network (DQN) to learn a policy over this discrete action space. The model takes as input a vectorized representation of the partially observed state and outputs scores for each possible action. Training uses experience replay and target networks to stabilize learning, and the fully simulated environment allows efficient generation of training trajectories without additional data collection. We evaluate our approach against several baselines, including full multi-omics models that use all modalities, fixed modality subsets, random acquisition policies under the same budget, greedy strategies based on feature importance or uncertainty, and one-shot gating models that select modalities without sequential decision-making. For prediction, we report AUC/AUPRC and ranking metrics such as NDCG based on the model’s final dependency estimates over the candidate set. For the final target-selection action, we report the dependency score of the selected gene and hit rate for selecting a gene among the top-k most dependent candidates. We additionally report cost-performance curves showing how these metrics change as the average number of evidence queries varies. We analyze learned policies by visualizing modality usage across cancer types and examining decision trajectories, including a cancer-type-by-modality heatmap to assess whether the agent learns biologically interpretable, context-specific strategies. We also analyze failure cases, including settings where the learned policy over-queries redundant evidence, stops too early, or is misled by noisy modality-specific predictors. As a reach goal, we explore a multi-agent variant in which modality-specific experts learn to communicate compressed information to the central policy.
 
-## Milestone Plan
+## Current Progress
 
-The first milestone is an end-to-end baseline and environment pipeline:
+The project now has an end-to-end Modal pipeline for real DepMap data, baselines,
+visualization, and a first learned RL policy:
 
-1. Load DepMap-style dependency and modality matrices.
-2. Build fixed-size candidate gene episodes for each cell line.
-3. Run direct data baselines that rank candidates from already-available modality matrices.
-4. Run RL environment baselines that must query evidence through the sequential query/select API.
-5. Report ranking, selected-target, query-cost, and episode-reward metrics.
+1. DepMap download and persistence are handled on Modal using `seacts-data` and
+   `seacts-results` volumes.
+2. The data pipeline loads CRISPR dependency, model metadata, expression, copy
+   number, damaging mutation, and hotspot mutation matrices.
+3. Candidate episodes are built from fixed-size cell-line/gene sets with hidden
+   dependency scores used only for reward and evaluation.
+4. Direct data baselines rank candidates from already available modality
+   matrices.
+5. RL environment baselines use the sequential `QUERY(gene, modality)` and
+   `SELECT(gene)` API with normalized query costs, including fixed-budget
+   expression baselines for query-budget comparison.
+6. The RL environment can replace raw modality values with simple supervised
+   per-gene modality scores so queries reveal dependency-prediction evidence
+   rather than uncalibrated raw omics values.
+7. A Double DQN policy trains on the same environment with action masking,
+   replay, target networks, validation checkpointing, selection-aware
+   exploration, and expression-expert replay seeding.
+8. Metrics are logged to W&B and saved as CSVs, including selected dependency,
+   Hit@k, NDCG@k, MRR@k, query cost, number of queries, modality usage, and
+   total reward.
+9. Visualization scripts compare baseline and DQN metrics, including DQN query
+   count and modality-use analysis, and log figures to W&B.
 
-This gives us the shared data/evaluation surface and environment API needed before adding the DQN policy.
+The current supervised-score DQN gets near full-expression performance while
+using substantially fewer queries. In the latest run, DQN reached total reward
+`0.991` with `9.45` queries on average, compared with total reward `1.011` for
+full expression querying with `16` queries and `0.933` for the expression
+budget-12 baseline. Results are saved to the Modal results volume and logged to
+W&B for comparison against the environment baselines.
+
+## Next Steps
+
+1. Analyze DQN trajectories: query-count distributions, modality-use bars,
+   example successful trajectories, and failure cases.
+2. If needed, add a stronger one-shot modality-gating baseline.
+3. Longer-term, add richer cancer-context analyses once the core score-based
+   environment is working.
 
 ## Setup
 
@@ -156,7 +187,7 @@ For real DepMap filenames, use `configs/depmap_baselines.yaml`. The current base
 - `data/raw/OmicsSomaticMutationsMatrixHotspot.csv`
 - `data/raw/PortalOmicsCNGeneLog2.csv`
 
-The downloader also keeps project context files for later cancer-context features and analysis:
+The downloader also keeps context files for later analysis:
 
 - `data/raw/Gene.csv`
 - `data/raw/SubtypeMatrix.csv`
@@ -179,10 +210,16 @@ Metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal 
 
 - `rl_env_random_select`: selects a random candidate without querying evidence.
 - `rl_env_oracle_select`: selects by hidden dependency as an upper bound.
-- `rl_env_query_{modality}_then_select`: queries one modality for every candidate, then selects by the revealed values.
-- `rl_env_query_all_average_then_select`: queries all modalities for every candidate, then selects by the standardized average of revealed values.
+- `rl_env_query_{modality}_then_select`: queries one modality for every candidate, then selects by the revealed evidence scores.
+- `rl_env_query_expression_budget_{k}_then_select`: queries expression for a fixed budget of candidates, then selects by the revealed evidence scores.
+- `rl_env_query_all_average_then_select`: queries all modalities for every candidate, then selects by the standardized average of revealed evidence scores.
 
 Environment metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal rank at k, query cost, number of queries, and total episode reward.
+
+With `environment.use_supervised_modality_scores: true`, query actions reveal
+simple per-gene supervised dependency evidence scores learned from the training
+cell lines, rather than raw omics values. This makes modalities comparable while
+keeping CRISPR dependency hidden from the agent until reward/evaluation.
 
 The RL environment uses normalized query costs from `configs/depmap_baselines.yaml`. These costs are relative burden proxies on the same scale as dependency reward, not literal assay prices. The default values treat already available computational evidence as low-cost while still making exhaustive querying non-free.
 

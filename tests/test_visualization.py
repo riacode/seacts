@@ -14,6 +14,7 @@ def test_generate_baseline_figures_writes_expected_pngs(tmp_path: Path) -> None:
     data_path = tmp_path / "data_metrics.csv"
     environment_path = tmp_path / "environment_metrics.csv"
     dqn_path = tmp_path / "dqn_metrics.csv"
+    dqn_trajectory_path = tmp_path / "dqn_trajectories.csv"
     output_dir = tmp_path / "figures"
 
     pd.DataFrame(
@@ -56,14 +57,38 @@ def test_generate_baseline_figures_writes_expected_pngs(tmp_path: Path) -> None:
             }
         ]
     ).to_csv(dqn_path, index=False)
+    pd.DataFrame(
+        [
+            {
+                "episode_id": 0,
+                "cell_line_id": "ACH-1",
+                "selected_gene": "A",
+                "selected_index": 0,
+                "selected_dependency": -0.6,
+                "query_cost": 0.2,
+                "n_queries": 10,
+                "total_reward": 0.4,
+                "n_query_expression": 8,
+                "n_query_cna": 2,
+            }
+        ]
+    ).to_csv(dqn_trajectory_path, index=False)
 
-    figures = generate_baseline_figures(data_path, environment_path, output_dir, dqn_path)
+    figures = generate_baseline_figures(
+        data_path,
+        environment_path,
+        output_dir,
+        dqn_path,
+        dqn_trajectory_path,
+    )
 
     assert {figure.name for figure in figures} == {
         "environment_cost_vs_target_reward.png",
         "environment_total_reward.png",
         "environment_queries_vs_hit_rate.png",
         "baseline_ranking_metrics.png",
+        "dqn_query_count_distribution.png",
+        "dqn_modality_usage.png",
     }
     assert all(figure.exists() for figure in figures)
 

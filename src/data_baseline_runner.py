@@ -24,7 +24,6 @@ def run_data_baseline_pipeline(
         name: _resolve_data_path(path, raw_data_dir)
         for name, path in config.data.modalities.items()
     }
-
     data = load_project_data(
         dependency_path=dependency_path,
         modality_paths=modality_paths,

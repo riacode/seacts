@@ -31,6 +31,7 @@ class EvaluationConfig:
 
 @dataclass(frozen=True)
 class EnvironmentConfig:
+    use_supervised_modality_scores: bool
     query_costs: dict[str, float]
     repeated_query_penalty: float
 
@@ -101,6 +102,9 @@ def load_baseline_config(path: str | Path) -> BaselineConfig:
             full_query_cost=float(evaluation.get("full_query_cost", 0.0)),
         ),
         environment=EnvironmentConfig(
+            use_supervised_modality_scores=bool(
+                environment.get("use_supervised_modality_scores", False)
+            ),
             query_costs={
                 name: float(value)
                 for name, value in environment.get("query_costs", {}).items()

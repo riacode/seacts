@@ -10,6 +10,21 @@ import pandas as pd
 CELL_LINE_COLS = ("cell_line_id", "DepMap_ID", "model_id", "ModelID", "modelid")
 GENE_COLS = ("gene", "gene_symbol", "hugo_symbol", "HugoSymbol", "hugo_symbol")
 VALUE_COLS = ("value", "score", "dependency", "effect")
+OMICS_ID_COLUMNS = (
+    "ModelID",
+    "ModelConditionID",
+    "SequencingID",
+    "ProfileID",
+    "OmicsProfileID",
+    "IsDefaultEntryForModel",
+    "IsDefaultEntryForMC",
+    "IsDefaultEntryModel",
+    "IsDefaultEntryMC",
+)
+DEFAULT_ENTRY_COLUMNS = (
+    "IsDefaultEntryForModel",
+    "IsDefaultEntryModel",
+)
 GENE_ID_SUFFIX = re.compile(r"\s+\(\d+\)$")
 
 
@@ -43,10 +58,14 @@ def read_cell_line_by_gene_matrix(path: str | Path) -> pd.DataFrame:
     gene_col = _first_present(frame.columns, GENE_COLS)
     value_col = _first_present(frame.columns, VALUE_COLS)
 
+    if cell_col:
+        frame = _filter_default_model_entries(frame)
+
     if cell_col and gene_col and value_col:
         matrix = frame.pivot_table(index=cell_col, columns=gene_col, values=value_col, aggfunc="mean")
     elif cell_col:
         matrix = frame.set_index(cell_col)
+        matrix = matrix.drop(columns=[column for column in OMICS_ID_COLUMNS if column in matrix], errors="ignore")
     else:
         matrix = frame.set_index(frame.columns[0])
 
@@ -114,3 +133,13 @@ def load_project_data(
         modalities={name: modality.loc[cell_lines, genes] for name, modality in modalities.items()},
         metadata=metadata,
     )
+
+
+def _filter_default_model_entries(frame: pd.DataFrame) -> pd.DataFrame:
+    for column in DEFAULT_ENTRY_COLUMNS:
+        if column in frame:
+            values = frame[column].astype(str).str.lower()
+            filtered = frame[values.isin({"yes", "true", "1"})]
+            if not filtered.empty:
+                return filtered.copy()
+    return frame.copy()

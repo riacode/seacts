@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from random import Random
@@ -24,13 +26,14 @@ from src.dqn import (
 from src.environment import ActionType, EvidenceAcquisitionEnv
 from src.episodes import CandidateEpisode, EpisodeBuilder
 from src.metrics import hit_at_k, ndcg_at_k, reciprocal_rank_at_k
+from src.modality_scores import build_supervised_modality_scores
 from src.replay_buffer import ReplayBuffer, Transition
 from src.state_encoder import StateEncoder
 
 
 @dataclass(frozen=True)
 class RLTrainingConfig:
-    train_episodes: int = 5_000
+    train_episodes: int = 10_000
     eval_episodes: int = 500
     validation_episodes: int = 100
     hidden_dim: int = 128
@@ -44,11 +47,11 @@ class RLTrainingConfig:
     max_grad_norm: float = 10.0
     epsilon_start: float = 1.0
     epsilon_end: float = 0.05
-    epsilon_decay_steps: int = 10_000
+    epsilon_decay_steps: int = 20_000
     max_steps_per_episode: int = 32
-    select_exploration_probability: float = 0.5
+    select_exploration_probability: float = 0.25
     validation_interval: int = 100
-    expert_seed_episodes: int = 200
+    expert_seed_episodes: int = 1_000
     expert_seed_modality: str = "expression"
     wandb_log_interval: int = 25
 
@@ -84,6 +87,9 @@ class DQNRollout:
     n_queries: int
     total_reward: float
     modality_query_counts: dict[str, int]
+    selected_gene: str
+    cell_line_id: str
+    episode_id: int
 
 
 def run_dqn_training_pipeline(
@@ -108,8 +114,17 @@ def run_dqn_training_pipeline(
         config.seed + 2,
     )
 
+    modalities = (
+        build_supervised_modality_scores(
+            data.dependency,
+            data.modalities,
+            train_cell_lines={episode.cell_line_id for episode in train_episodes},
+        )
+        if config.environment.use_supervised_modality_scores
+        else data.modalities
+    )
     env = EvidenceAcquisitionEnv(
-        data.modalities,
+        modalities,
         query_costs=config.environment.query_costs,
         repeated_query_penalty=config.environment.repeated_query_penalty,
     )
@@ -117,36 +132,47 @@ def run_dqn_training_pipeline(
         n_genes=config.episodes.candidates_per_episode,
         n_modalities=len(env.modality_names),
     )
-    q_network, training_history = train_dqn_agent(
-        env=env,
-        episodes=train_episodes,
-        encoder=encoder,
-        hyperparameters=rl_config.hyperparameters,
-        seed=config.seed,
-        validation_episodes=validation_episodes,
-        top_k=config.evaluation.top_k,
-    )
 
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
     model_path = resolved_output_dir / "dqn_policy.pt"
     training_path = resolved_output_dir / "dqn_training_metrics.csv"
     output_path = resolved_output_dir / "dqn_eval_metrics.csv"
+    trajectory_path = resolved_output_dir / "dqn_trajectory_metrics.csv"
 
-    torch = _torch()
-    torch.save(q_network.state_dict(), model_path)
-    pd.DataFrame(training_history).to_csv(training_path, index=False)
+    with _wandb_dqn_run(config, config_path, rl_config, output_path) as wandb_run:
+        q_network, training_history = train_dqn_agent(
+            env=env,
+            episodes=train_episodes,
+            encoder=encoder,
+            hyperparameters=rl_config.hyperparameters,
+            seed=config.seed,
+            validation_episodes=validation_episodes,
+            top_k=config.evaluation.top_k,
+            training_log_callback=_wandb_training_logger(wandb_run, rl_config),
+        )
 
-    results = evaluate_dqn_agent(
-        q_network=q_network,
-        env=env,
-        episodes=eval_episodes,
-        encoder=encoder,
-        top_k=config.evaluation.top_k,
-        max_steps_per_episode=rl_config.max_steps_per_episode,
-    )
-    results.to_csv(output_path, index=False)
-    _log_dqn_to_wandb(config, config_path, rl_config, results, training_history, output_path, model_path)
+        torch = _torch()
+        torch.save(q_network.state_dict(), model_path)
+        pd.DataFrame(training_history).to_csv(training_path, index=False)
+
+        results = evaluate_dqn_agent(
+            q_network=q_network,
+            env=env,
+            episodes=eval_episodes,
+            encoder=encoder,
+            top_k=config.evaluation.top_k,
+            max_steps_per_episode=rl_config.max_steps_per_episode,
+        )
+        results.to_csv(output_path, index=False)
+        collect_dqn_trajectory_metrics(
+            q_network=q_network,
+            env=env,
+            episodes=eval_episodes,
+            encoder=encoder,
+            max_steps_per_episode=rl_config.max_steps_per_episode,
+        ).to_csv(trajectory_path, index=False)
+        _log_dqn_final_to_wandb(wandb_run, results, training_history, model_path)
     return results, output_path
 
 
@@ -155,7 +181,7 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         raw = yaml.safe_load(handle) or {}
     training = raw.get("rl_training", {})
     return RLTrainingConfig(
-        train_episodes=int(training.get("train_episodes", 5_000)),
+        train_episodes=int(training.get("train_episodes", 10_000)),
         eval_episodes=int(training.get("eval_episodes", 500)),
         validation_episodes=int(training.get("validation_episodes", 100)),
         hidden_dim=int(training.get("hidden_dim", 128)),
@@ -169,13 +195,13 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         max_grad_norm=float(training.get("max_grad_norm", 10.0)),
         epsilon_start=float(training.get("epsilon_start", 1.0)),
         epsilon_end=float(training.get("epsilon_end", 0.05)),
-        epsilon_decay_steps=int(training.get("epsilon_decay_steps", 10_000)),
+        epsilon_decay_steps=int(training.get("epsilon_decay_steps", 20_000)),
         max_steps_per_episode=int(training.get("max_steps_per_episode", 32)),
         select_exploration_probability=float(
-            training.get("select_exploration_probability", 0.5)
+            training.get("select_exploration_probability", 0.25)
         ),
         validation_interval=int(training.get("validation_interval", 100)),
-        expert_seed_episodes=int(training.get("expert_seed_episodes", 200)),
+        expert_seed_episodes=int(training.get("expert_seed_episodes", 1_000)),
         expert_seed_modality=str(training.get("expert_seed_modality", "expression")),
         wandb_log_interval=int(training.get("wandb_log_interval", 25)),
     )
@@ -189,6 +215,7 @@ def train_dqn_agent(
     seed: int,
     validation_episodes: list[CandidateEpisode] | None = None,
     top_k: int = 3,
+    training_log_callback: Callable[[dict[str, float | int]], None] | None = None,
 ) -> tuple[Any, list[dict[str, float | int]]]:
     if not episodes:
         raise ValueError("Cannot train DQN on zero episodes.")
@@ -309,6 +336,8 @@ def train_dqn_agent(
                 best_validation_reward = float(row["validation_total_reward"])
                 best_state_dict = _clone_state_dict(q_network)
         history.append(row)
+        if training_log_callback is not None:
+            training_log_callback(row)
 
     if best_state_dict is not None:
         q_network.load_state_dict(best_state_dict)
@@ -354,6 +383,32 @@ def evaluate_dqn_agent(
             float(rollout.modality_query_counts.get(modality_name, 0.0)) for rollout in rollouts
         )
     return pd.DataFrame([row])
+
+
+def collect_dqn_trajectory_metrics(
+    q_network: Any,
+    env: EvidenceAcquisitionEnv,
+    episodes: list[CandidateEpisode],
+    encoder: StateEncoder,
+    max_steps_per_episode: int,
+) -> pd.DataFrame:
+    rows = []
+    for episode in episodes:
+        rollout = _run_greedy_dqn_episode(q_network, env, episode, encoder, max_steps_per_episode)
+        row: dict[str, float | int | str] = {
+            "episode_id": rollout.episode_id,
+            "cell_line_id": rollout.cell_line_id,
+            "selected_gene": rollout.selected_gene,
+            "selected_index": rollout.selected_index,
+            "selected_dependency": rollout.selected_dependency,
+            "query_cost": rollout.query_cost,
+            "n_queries": rollout.n_queries,
+            "total_reward": rollout.total_reward,
+        }
+        for modality_name in env.modality_names:
+            row[f"n_query_{modality_name}"] = rollout.modality_query_counts.get(modality_name, 0)
+        rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def _run_greedy_dqn_episode(
@@ -405,6 +460,9 @@ def _run_greedy_dqn_episode(
         n_queries=n_queries,
         total_reward=total_reward,
         modality_query_counts=modality_query_counts,
+        selected_gene=episode.candidate_genes[selected_index],
+        cell_line_id=episode.cell_line_id,
+        episode_id=episode.episode_id,
     )
 
 
@@ -550,6 +608,25 @@ def _log_dqn_to_wandb(
 ) -> None:
     if not config.tracking.wandb.enabled:
         return
+    with _wandb_dqn_run(config, config_path, rl_config, output_path) as run:
+        if training_history:
+            logger = _wandb_training_logger(run, rl_config)
+            for row in training_history:
+                logger(row)
+        _log_dqn_final_to_wandb(run, results, training_history, model_path)
+
+
+@contextmanager
+def _wandb_dqn_run(
+    config: BaselineConfig,
+    config_path: str | Path,
+    rl_config: RLTrainingConfig,
+    output_path: Path,
+) -> Iterator[Any | None]:
+    if not config.tracking.wandb.enabled:
+        yield None
+        return
+
     try:
         import wandb
     except ImportError as error:
@@ -569,50 +646,77 @@ def _log_dqn_to_wandb(
             "output_path": str(output_path),
         },
     ) as run:
-        if training_history:
-            final_episode = int(training_history[-1]["episode"])
-            log_interval = max(rl_config.wandb_log_interval, 1)
-            for row in training_history:
-                episode = int(row["episode"])
-                if episode % log_interval != 0 and episode != final_episode:
-                    continue
-                run.log(
-                    {
-                        "train/total_reward": row["total_reward"],
-                        "train/n_queries": row["n_queries"],
-                        "train/epsilon": row["epsilon"],
-                        "train/loss": row["loss"],
-                    },
-                    step=episode,
-                )
-                if "validation_total_reward" in row:
-                    run.log(
-                        {
-                            "validation/total_reward": row["validation_total_reward"],
-                            "validation/n_queries": row["validation_n_queries"],
-                            "validation/selected_dependency": row[
-                                "validation_selected_dependency"
-                            ],
-                            "validation/hit_at_k": row["validation_hit_at_k"],
-                        },
-                        step=episode,
-                    )
-            run.summary.update(
+        yield run
+
+
+def _wandb_training_logger(
+    run: Any | None,
+    rl_config: RLTrainingConfig,
+) -> Callable[[dict[str, float | int]], None] | None:
+    if run is None:
+        return None
+
+    log_interval = max(rl_config.wandb_log_interval, 1)
+    final_episode = rl_config.train_episodes - 1
+
+    def log_row(row: dict[str, float | int]) -> None:
+        episode = int(row["episode"])
+        if episode % log_interval != 0 and episode != final_episode:
+            return
+        run.log(
+            {
+                "train/total_reward": row["total_reward"],
+                "train/n_queries": row["n_queries"],
+                "train/epsilon": row["epsilon"],
+                "train/loss": row["loss"],
+            },
+            step=episode,
+        )
+        if "validation_total_reward" in row:
+            run.log(
                 {
-                    "train/final_total_reward": training_history[-1]["total_reward"],
-                    "train/final_n_queries": training_history[-1]["n_queries"],
-                    "train/final_epsilon": training_history[-1]["epsilon"],
-                    "train/final_loss": training_history[-1]["loss"],
-                }
+                    "validation/total_reward": row["validation_total_reward"],
+                    "validation/n_queries": row["validation_n_queries"],
+                    "validation/selected_dependency": row[
+                        "validation_selected_dependency"
+                    ],
+                    "validation/hit_at_k": row["validation_hit_at_k"],
+                },
+                step=episode,
             )
-        eval_metrics = {}
-        for row in results.to_dict(orient="records"):
-            for key, value in row.items():
-                if key != "policy":
-                    eval_metrics[f"eval/{key}"] = value
-        run.summary.update(eval_metrics)
-        run.log({"dqn_eval_metrics": wandb.Table(dataframe=results)})
-        run.save(str(model_path))
+
+    return log_row
+
+
+def _log_dqn_final_to_wandb(
+    run: Any | None,
+    results: pd.DataFrame,
+    training_history: list[dict[str, float | int]],
+    model_path: Path,
+) -> None:
+    if run is None:
+        return
+
+    if training_history:
+        run.summary.update(
+            {
+                "train/final_total_reward": training_history[-1]["total_reward"],
+                "train/final_n_queries": training_history[-1]["n_queries"],
+                "train/final_epsilon": training_history[-1]["epsilon"],
+                "train/final_loss": training_history[-1]["loss"],
+            }
+        )
+    eval_metrics = {}
+    for row in results.to_dict(orient="records"):
+        for key, value in row.items():
+            if key != "policy":
+                eval_metrics[f"eval/{key}"] = value
+    run.summary.update(eval_metrics)
+
+    import wandb
+
+    run.log({"dqn_eval_metrics": wandb.Table(dataframe=results)})
+    run.save(str(model_path))
 
 
 def _torch() -> Any:

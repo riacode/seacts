@@ -92,6 +92,42 @@ class QueryModalityPolicy:
 
 
 @dataclass(frozen=True)
+class QueryModalityBudgetPolicy:
+    modality_name: str
+    query_budget: int
+
+    @property
+    def name(self) -> str:
+        return f"rl_env_query_{self.modality_name}_budget_{self.query_budget}_then_select"
+
+    def run(self, env: EvidenceAcquisitionEnv, episode: CandidateEpisode) -> EnvironmentRollout:
+        env.reset(episode)
+        modality_index = _modality_index(env, self.modality_name)
+        query_reward = 0.0
+        n_queries = 0
+        for gene_index in range(min(self.query_budget, len(episode.candidate_genes))):
+            result = env.step(env.query_action(gene_index, modality_index))
+            query_reward += result.reward
+            n_queries += 1
+
+        state = env.state
+        ranked = sorted(
+            range(len(episode.candidate_genes)),
+            key=lambda i: _rank_value(state.observed_values[i][modality_index]),
+            reverse=True,
+        )
+        return _select(
+            env,
+            episode,
+            self.name,
+            ranked,
+            query_cost=-query_reward,
+            n_queries=n_queries,
+            query_reward=query_reward,
+        )
+
+
+@dataclass(frozen=True)
 class QueryAllAveragePolicy:
     name: str = "rl_env_query_all_average_then_select"
 
@@ -164,6 +200,8 @@ def build_environment_policies(modality_names: tuple[str, ...], seed: int) -> li
         OracleSelectPolicy(),
     ]
     policies.extend(QueryModalityPolicy(name) for name in modality_names)
+    if "expression" in modality_names:
+        policies.extend(QueryModalityBudgetPolicy("expression", budget) for budget in (4, 8, 12))
     policies.append(QueryAllAveragePolicy())
     return policies
 

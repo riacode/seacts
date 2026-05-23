@@ -8,7 +8,6 @@ data:
     damaging_mutation: data/raw/OmicsSomaticMutationsMatrixDamaging.csv
     hotspot_mutation: data/raw/OmicsSomaticMutationsMatrixHotspot.csv
     cna: data/raw/PortalOmicsCNGeneLog2.csv
-
 episodes:
   n_episodes: 1000
   candidates_per_episode: 16
@@ -21,6 +20,7 @@ evaluation:
   full_query_cost: 3.0
 
 environment:
+  use_supervised_modality_scores: true
   # Normalized evidence-acquisition costs on the same scale as dependency reward.
   # These are relative burden proxies for already available computational evidence,
   # not literal assay prices.
@@ -32,7 +32,7 @@ environment:
   repeated_query_penalty: 0.0
 
 rl_training:
-  train_episodes: 5000
+  train_episodes: 10000
   eval_episodes: 500
   validation_episodes: 100
   hidden_dim: 128
@@ -46,11 +46,11 @@ rl_training:
   max_grad_norm: 10.0
   epsilon_start: 1.0
   epsilon_end: 0.05
-  epsilon_decay_steps: 10000
+  epsilon_decay_steps: 20000
   max_steps_per_episode: 32
-  select_exploration_probability: 0.5
+  select_exploration_probability: 0.25
   validation_interval: 100
-  expert_seed_episodes: 200
+  expert_seed_episodes: 1000
   expert_seed_modality: expression
   wandb_log_interval: 25
 

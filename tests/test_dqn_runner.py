@@ -16,6 +16,7 @@ from src.replay_buffer import ReplayBuffer, Transition
 from src.rl_runner import (
     RLTrainingConfig,
     _log_dqn_to_wandb,
+    collect_dqn_trajectory_metrics,
     evaluate_dqn_agent,
     seed_replay_with_modality_expert,
     train_dqn_agent,
@@ -87,6 +88,46 @@ def test_train_and_evaluate_dqn_on_tiny_environment() -> None:
     assert "n_query_expression" in results.columns
 
 
+def test_collect_dqn_trajectory_metrics_returns_per_episode_rows() -> None:
+    pytest.importorskip("torch")
+
+    env = _env()
+    encoder = StateEncoder(n_genes=2, n_modalities=1)
+    network, _ = train_dqn_agent(
+        env=env,
+        episodes=_episodes(),
+        encoder=encoder,
+        hyperparameters=DQNHyperparameters(
+            hidden_dim=16,
+            batch_size=2,
+            replay_capacity=20,
+            learning_starts=2,
+            train_frequency=1,
+            target_update_steps=2,
+            max_steps_per_episode=3,
+            epsilon_decay_steps=1,
+        ),
+        seed=0,
+    )
+
+    trajectories = collect_dqn_trajectory_metrics(
+        q_network=network,
+        env=env,
+        episodes=_episodes(),
+        encoder=encoder,
+        max_steps_per_episode=3,
+    )
+
+    assert len(trajectories) == 2
+    assert {
+        "episode_id",
+        "cell_line_id",
+        "selected_gene",
+        "n_queries",
+        "n_query_expression",
+    }.issubset(trajectories.columns)
+
+
 def test_optimize_dqn_batch_uses_double_dqn_target_selection() -> None:
     torch = pytest.importorskip("torch")
 
@@ -141,15 +182,16 @@ def test_epsilon_exploration_can_prioritize_select_actions() -> None:
 def test_rl_training_config_uses_stable_dqn_defaults() -> None:
     config = RLTrainingConfig()
 
-    assert config.train_episodes == 5000
+    assert config.train_episodes == 10000
     assert config.learning_rate == 0.0001
     assert config.learning_starts == 500
     assert config.train_frequency == 4
     assert config.target_update_steps == 500
     assert config.max_grad_norm == 10.0
-    assert config.epsilon_decay_steps == 10000
+    assert config.epsilon_decay_steps == 20000
     assert config.validation_interval == 100
-    assert config.expert_seed_episodes == 200
+    assert config.select_exploration_probability == 0.25
+    assert config.expert_seed_episodes == 1000
     assert config.expert_seed_modality == "expression"
     assert config.wandb_log_interval == 25
 
@@ -207,7 +249,7 @@ def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Pat
     _log_dqn_to_wandb(
         config=config,
         config_path="config.yaml",
-        rl_config=RLTrainingConfig(wandb_log_interval=2),
+        rl_config=RLTrainingConfig(train_episodes=4, wandb_log_interval=2),
         results=pd.DataFrame([{"policy": "rl_env_dqn", "total_reward": 0.5}]),
         training_history=[
             {"episode": 0, "total_reward": 0.1, "n_queries": 1, "epsilon": 1.0, "loss": 0.0},

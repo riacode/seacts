@@ -17,6 +17,10 @@ def parse_args() -> argparse.Namespace:
         default="outputs/depmap_baselines/environment_baseline_metrics.csv",
     )
     parser.add_argument("--dqn-metrics", default="outputs/depmap_baselines/dqn_eval_metrics.csv")
+    parser.add_argument(
+        "--dqn-trajectories",
+        default="outputs/depmap_baselines/dqn_trajectory_metrics.csv",
+    )
     parser.add_argument("--output-dir", default="outputs/figures")
     return parser.parse_args()
 
@@ -27,6 +31,7 @@ def main() -> None:
         data_metrics_path=args.data_metrics,
         environment_metrics_path=args.environment_metrics,
         dqn_metrics_path=args.dqn_metrics,
+        dqn_trajectory_path=args.dqn_trajectories,
         output_dir=args.output_dir,
     )
     for figure in figures:
