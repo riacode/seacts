@@ -42,6 +42,7 @@ class RLTrainingConfig:
     epsilon_end: float = 0.05
     epsilon_decay_steps: int = 2_000
     max_steps_per_episode: int = 32
+    wandb_log_interval: int = 10
 
     @property
     def hyperparameters(self) -> DQNHyperparameters:
@@ -143,6 +144,7 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         epsilon_end=float(training.get("epsilon_end", 0.05)),
         epsilon_decay_steps=int(training.get("epsilon_decay_steps", 2_000)),
         max_steps_per_episode=int(training.get("max_steps_per_episode", 32)),
+        wandb_log_interval=int(training.get("wandb_log_interval", 10)),
     )
 
 
@@ -420,6 +422,21 @@ def _log_dqn_to_wandb(
         },
     ) as run:
         if training_history:
+            final_episode = int(training_history[-1]["episode"])
+            log_interval = max(rl_config.wandb_log_interval, 1)
+            for row in training_history:
+                episode = int(row["episode"])
+                if episode % log_interval != 0 and episode != final_episode:
+                    continue
+                run.log(
+                    {
+                        "train/total_reward": row["total_reward"],
+                        "train/n_queries": row["n_queries"],
+                        "train/epsilon": row["epsilon"],
+                        "train/loss": row["loss"],
+                    },
+                    step=episode,
+                )
             run.log(
                 {
                     "train/final_total_reward": training_history[-1]["total_reward"],

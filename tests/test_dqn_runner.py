@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
@@ -7,7 +11,7 @@ from src.dqn import DQNHyperparameters, optimize_dqn_batch
 from src.environment import EvidenceAcquisitionEnv
 from src.episodes import CandidateEpisode
 from src.replay_buffer import Transition
-from src.rl_runner import evaluate_dqn_agent, train_dqn_agent
+from src.rl_runner import RLTrainingConfig, _log_dqn_to_wandb, evaluate_dqn_agent, train_dqn_agent
 from src.state_encoder import StateEncoder
 
 
@@ -105,3 +109,77 @@ def test_optimize_dqn_batch_uses_double_dqn_target_selection() -> None:
     )
 
     assert loss == pytest.approx(0.5)
+
+
+def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Path) -> None:
+    logged: list[tuple[dict, int | None]] = []
+
+    class FakeRun:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def log(self, data, step=None):
+            logged.append((data, step))
+
+        def save(self, path):
+            logged.append(({"saved": path}, None))
+
+    fake_wandb = SimpleNamespace(
+        init=lambda **kwargs: FakeRun(),
+        Table=lambda dataframe: {"rows": len(dataframe)},
+    )
+    monkeypatch.setitem(sys.modules, "wandb", fake_wandb)
+    config = SimpleNamespace(
+        tracking=SimpleNamespace(
+            wandb=SimpleNamespace(enabled=True, entity="seacts", project="seacts")
+        )
+    )
+
+    _log_dqn_to_wandb(
+        config=config,
+        config_path="config.yaml",
+        rl_config=RLTrainingConfig(wandb_log_interval=2),
+        results=pd.DataFrame([{"policy": "rl_env_dqn", "total_reward": 0.5}]),
+        training_history=[
+            {"episode": 0, "total_reward": 0.1, "n_queries": 1, "epsilon": 1.0, "loss": 0.0},
+            {"episode": 1, "total_reward": 0.2, "n_queries": 2, "epsilon": 0.9, "loss": 0.3},
+            {"episode": 2, "total_reward": 0.3, "n_queries": 3, "epsilon": 0.8, "loss": 0.4},
+            {"episode": 3, "total_reward": 0.4, "n_queries": 4, "epsilon": 0.7, "loss": 0.5},
+        ],
+        output_path=tmp_path / "dqn_eval_metrics.csv",
+        model_path=tmp_path / "dqn_policy.pt",
+    )
+
+    train_logs = [item for item in logged if "train/total_reward" in item[0]]
+    assert train_logs == [
+        (
+            {
+                "train/total_reward": 0.1,
+                "train/n_queries": 1,
+                "train/epsilon": 1.0,
+                "train/loss": 0.0,
+            },
+            0,
+        ),
+        (
+            {
+                "train/total_reward": 0.3,
+                "train/n_queries": 3,
+                "train/epsilon": 0.8,
+                "train/loss": 0.4,
+            },
+            2,
+        ),
+        (
+            {
+                "train/total_reward": 0.4,
+                "train/n_queries": 4,
+                "train/epsilon": 0.7,
+                "train/loss": 0.5,
+            },
+            3,
+        ),
+    ]
