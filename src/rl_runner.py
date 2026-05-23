@@ -30,7 +30,7 @@ from src.state_encoder import StateEncoder
 
 @dataclass(frozen=True)
 class RLTrainingConfig:
-    train_episodes: int = 1_000
+    train_episodes: int = 5_000
     eval_episodes: int = 500
     validation_episodes: int = 100
     hidden_dim: int = 128
@@ -44,13 +44,13 @@ class RLTrainingConfig:
     max_grad_norm: float = 10.0
     epsilon_start: float = 1.0
     epsilon_end: float = 0.05
-    epsilon_decay_steps: int = 2_000
+    epsilon_decay_steps: int = 10_000
     max_steps_per_episode: int = 32
     select_exploration_probability: float = 0.5
-    validation_interval: int = 50
+    validation_interval: int = 100
     expert_seed_episodes: int = 200
     expert_seed_modality: str = "expression"
-    wandb_log_interval: int = 10
+    wandb_log_interval: int = 25
 
     @property
     def hyperparameters(self) -> DQNHyperparameters:
@@ -155,7 +155,7 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         raw = yaml.safe_load(handle) or {}
     training = raw.get("rl_training", {})
     return RLTrainingConfig(
-        train_episodes=int(training.get("train_episodes", 1_000)),
+        train_episodes=int(training.get("train_episodes", 5_000)),
         eval_episodes=int(training.get("eval_episodes", 500)),
         validation_episodes=int(training.get("validation_episodes", 100)),
         hidden_dim=int(training.get("hidden_dim", 128)),
@@ -169,15 +169,15 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         max_grad_norm=float(training.get("max_grad_norm", 10.0)),
         epsilon_start=float(training.get("epsilon_start", 1.0)),
         epsilon_end=float(training.get("epsilon_end", 0.05)),
-        epsilon_decay_steps=int(training.get("epsilon_decay_steps", 2_000)),
+        epsilon_decay_steps=int(training.get("epsilon_decay_steps", 10_000)),
         max_steps_per_episode=int(training.get("max_steps_per_episode", 32)),
         select_exploration_probability=float(
             training.get("select_exploration_probability", 0.5)
         ),
-        validation_interval=int(training.get("validation_interval", 50)),
+        validation_interval=int(training.get("validation_interval", 100)),
         expert_seed_episodes=int(training.get("expert_seed_episodes", 200)),
         expert_seed_modality=str(training.get("expert_seed_modality", "expression")),
-        wandb_log_interval=int(training.get("wandb_log_interval", 10)),
+        wandb_log_interval=int(training.get("wandb_log_interval", 25)),
     )
 
 

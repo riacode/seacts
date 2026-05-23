@@ -141,14 +141,17 @@ def test_epsilon_exploration_can_prioritize_select_actions() -> None:
 def test_rl_training_config_uses_stable_dqn_defaults() -> None:
     config = RLTrainingConfig()
 
+    assert config.train_episodes == 5000
     assert config.learning_rate == 0.0001
     assert config.learning_starts == 500
     assert config.train_frequency == 4
     assert config.target_update_steps == 500
     assert config.max_grad_norm == 10.0
-    assert config.validation_interval == 50
+    assert config.epsilon_decay_steps == 10000
+    assert config.validation_interval == 100
     assert config.expert_seed_episodes == 200
     assert config.expert_seed_modality == "expression"
+    assert config.wandb_log_interval == 25
 
 
 def test_seed_replay_with_modality_expert_adds_query_and_select_transitions() -> None:

@@ -32,7 +32,7 @@ environment:
   repeated_query_penalty: 0.0
 
 rl_training:
-  train_episodes: 1000
+  train_episodes: 5000
   eval_episodes: 500
   validation_episodes: 100
   hidden_dim: 128
@@ -46,13 +46,13 @@ rl_training:
   max_grad_norm: 10.0
   epsilon_start: 1.0
   epsilon_end: 0.05
-  epsilon_decay_steps: 2000
+  epsilon_decay_steps: 10000
   max_steps_per_episode: 32
   select_exploration_probability: 0.5
-  validation_interval: 50
+  validation_interval: 100
   expert_seed_episodes: 200
   expert_seed_modality: expression
-  wandb_log_interval: 10
+  wandb_log_interval: 25
 
 tracking:
   wandb:
