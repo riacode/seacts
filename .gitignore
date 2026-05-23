@@ -14,3 +14,4 @@ data/processed/
 outputs/
 
 .DS_Store
+.vscode/

@@ -13,6 +13,7 @@ def test_generate_baseline_figures_writes_expected_pngs(tmp_path: Path) -> None:
 
     data_path = tmp_path / "data_metrics.csv"
     environment_path = tmp_path / "environment_metrics.csv"
+    dqn_path = tmp_path / "dqn_metrics.csv"
     output_dir = tmp_path / "figures"
 
     pd.DataFrame(
@@ -41,8 +42,22 @@ def test_generate_baseline_figures_writes_expected_pngs(tmp_path: Path) -> None:
             }
         ]
     ).to_csv(environment_path, index=False)
+    pd.DataFrame(
+        [
+            {
+                "policy": "rl_env_dqn",
+                "selected_dependency": -0.6,
+                "hit_at_k": 0.7,
+                "ndcg_at_k": 0.4,
+                "mrr_at_k": 0.3,
+                "query_cost": 0.2,
+                "n_queries": 10,
+                "total_reward": 0.4,
+            }
+        ]
+    ).to_csv(dqn_path, index=False)
 
-    figures = generate_baseline_figures(data_path, environment_path, output_dir)
+    figures = generate_baseline_figures(data_path, environment_path, output_dir, dqn_path)
 
     assert {figure.name for figure in figures} == {
         "environment_cost_vs_target_reward.png",

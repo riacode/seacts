@@ -83,6 +83,12 @@ Run RL environment baselines through the sequential query/select API:
 modal run modal_environment_baselines.py
 ```
 
+Train and evaluate the first DQN policy against the same environment:
+
+```bash
+modal run modal_train_dqn.py
+```
+
 Plot the saved data and environment baseline results and log the figures to W&B:
 
 ```bash
@@ -113,21 +119,27 @@ src/
 ├── data.py                  # DepMap-style matrix loading
 ├── data_baseline_runner.py  # Direct data baseline runner
 ├── data_baselines.py        # Direct data baseline policies
+├── dqn.py                   # Double DQN network and optimization helpers
 ├── depmap_files.py          # DepMap manifest filtering and downloads
 ├── environment.py           # Sequential evidence-acquisition environment
 ├── environment_baselines.py # RL environment baseline policies
 ├── environment_runner.py    # RL environment baseline runner
 ├── episodes.py              # Candidate episode construction
-└── metrics.py               # Ranking and selection metrics
+├── metrics.py               # Ranking and selection metrics
+├── replay_buffer.py         # Experience replay storage
+├── rl_runner.py             # DQN training/evaluation runner
+└── state_encoder.py         # State vectorization and action indexing
 
 scripts/
 ├── plot_baseline_results.py
 ├── run_data_baselines.py
-└── run_environment_baselines.py
+├── run_environment_baselines.py
+└── train_dqn.py
 
 modal_data.py                  # DepMap download/prep launcher
 modal_data_baselines.py        # Modal data-baseline runner
 modal_environment_baselines.py # Modal environment-baseline runner
+modal_train_dqn.py             # Modal DQN training runner
 modal_visualizations.py        # Modal plotting runner
 ```
 

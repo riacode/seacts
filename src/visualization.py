@@ -13,20 +13,24 @@ def generate_baseline_figures(
     data_metrics_path: str | Path | None,
     environment_metrics_path: str | Path | None,
     output_dir: str | Path,
+    dqn_metrics_path: str | Path | None = None,
 ) -> list[Path]:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     data_results = _read_metrics(data_metrics_path)
     environment_results = _read_metrics(environment_metrics_path)
+    dqn_results = _read_metrics(dqn_metrics_path)
+
+    environment_comparison = _combine_environment_results(environment_results, dqn_results)
 
     figures: list[Path] = []
-    if environment_results is not None:
-        figures.append(_plot_cost_vs_target_reward(environment_results, output_path))
-        figures.append(_plot_total_reward(environment_results, output_path))
-        figures.append(_plot_query_count_vs_hit_rate(environment_results, output_path))
+    if environment_comparison is not None:
+        figures.append(_plot_cost_vs_target_reward(environment_comparison, output_path))
+        figures.append(_plot_total_reward(environment_comparison, output_path))
+        figures.append(_plot_query_count_vs_hit_rate(environment_comparison, output_path))
 
-    combined = _combine_results(data_results, environment_results)
+    combined = _combine_results(data_results, environment_results, dqn_results)
     if combined is not None:
         figures.append(_plot_ranking_metrics(combined, output_path))
 
@@ -50,6 +54,7 @@ def _read_metrics(path: str | Path | None) -> pd.DataFrame | None:
 def _combine_results(
     data_results: pd.DataFrame | None,
     environment_results: pd.DataFrame | None,
+    dqn_results: pd.DataFrame | None,
 ) -> pd.DataFrame | None:
     frames = []
     if data_results is not None:
@@ -60,6 +65,20 @@ def _combine_results(
         environment = environment_results.copy()
         environment["baseline_family"] = "rl_env"
         frames.append(environment)
+    if dqn_results is not None:
+        dqn = dqn_results.copy()
+        dqn["baseline_family"] = "rl"
+        frames.append(dqn)
+    if not frames:
+        return None
+    return pd.concat(frames, ignore_index=True)
+
+
+def _combine_environment_results(
+    environment_results: pd.DataFrame | None,
+    dqn_results: pd.DataFrame | None,
+) -> pd.DataFrame | None:
+    frames = [frame.copy() for frame in (environment_results, dqn_results) if frame is not None]
     if not frames:
         return None
     return pd.concat(frames, ignore_index=True)
