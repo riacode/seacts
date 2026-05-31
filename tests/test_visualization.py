@@ -32,6 +32,16 @@ def test_generate_baseline_figures_writes_expected_pngs(tmp_path: Path) -> None:
     pd.DataFrame(
         [
             {
+                "policy": "rl_env_random_select",
+                "selected_dependency": -0.2,
+                "hit_at_k": 0.2,
+                "ndcg_at_k": 0.1,
+                "mrr_at_k": 0.05,
+                "query_cost": 0.0,
+                "n_queries": 0,
+                "total_reward": -0.2,
+            },
+            {
                 "policy": "rl_env_query_expression_then_select",
                 "selected_dependency": -0.7,
                 "hit_at_k": 0.8,
@@ -40,7 +50,17 @@ def test_generate_baseline_figures_writes_expected_pngs(tmp_path: Path) -> None:
                 "query_cost": 0.32,
                 "n_queries": 16,
                 "total_reward": 0.38,
-            }
+            },
+            {
+                "policy": "rl_env_oracle_select",
+                "selected_dependency": -0.9,
+                "hit_at_k": 1.0,
+                "ndcg_at_k": 1.0,
+                "mrr_at_k": 1.0,
+                "query_cost": 0.0,
+                "n_queries": 0,
+                "total_reward": 0.9,
+            },
         ]
     ).to_csv(environment_path, index=False)
     pd.DataFrame(

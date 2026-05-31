@@ -99,38 +99,10 @@ def run_dqn_training_pipeline(
 ) -> tuple[pd.DataFrame, Path]:
     config = load_baseline_config(config_path)
     rl_config = load_rl_training_config(config_path)
-    data = _load_training_data(config, raw_data_dir)
-    train_episodes = _build_episode_set(config, data.dependency, rl_config.train_episodes, config.seed)
-    eval_episodes = _build_episode_set(
+    train_episodes, eval_episodes, validation_episodes, env, encoder = _prepare_dqn_setup(
         config,
-        data.dependency,
-        rl_config.eval_episodes,
-        config.seed + 1,
-    )
-    validation_episodes = _build_episode_set(
-        config,
-        data.dependency,
-        rl_config.validation_episodes,
-        config.seed + 2,
-    )
-
-    modalities = (
-        build_supervised_modality_scores(
-            data.dependency,
-            data.modalities,
-            train_cell_lines={episode.cell_line_id for episode in train_episodes},
-        )
-        if config.environment.use_supervised_modality_scores
-        else data.modalities
-    )
-    env = EvidenceAcquisitionEnv(
-        modalities,
-        query_costs=config.environment.query_costs,
-        repeated_query_penalty=config.environment.repeated_query_penalty,
-    )
-    encoder = StateEncoder(
-        n_genes=config.episodes.candidates_per_episode,
-        n_modalities=len(env.modality_names),
+        raw_data_dir,
+        rl_config,
     )
 
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
@@ -385,6 +357,39 @@ def evaluate_dqn_agent(
     return pd.DataFrame([row])
 
 
+def build_dqn_eval_env(
+    config: BaselineConfig,
+    raw_data_dir: str | Path | None,
+    rl_config: RLTrainingConfig,
+) -> tuple[EvidenceAcquisitionEnv, StateEncoder, list[CandidateEpisode]]:
+    _, eval_episodes, _, env, encoder = _prepare_dqn_setup(config, raw_data_dir, rl_config)
+    return env, encoder, eval_episodes
+
+
+def collect_dqn_behavior_log(
+    q_network: Any,
+    env: EvidenceAcquisitionEnv,
+    episodes: list[CandidateEpisode],
+    encoder: StateEncoder,
+    top_k: int,
+    max_steps_per_episode: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    episode_rows: list[dict[str, float | int | str | bool]] = []
+    step_rows: list[dict[str, float | int | str | None]] = []
+    for episode in episodes:
+        rollout, steps = _run_greedy_dqn_episode(
+            q_network,
+            env,
+            episode,
+            encoder,
+            max_steps_per_episode,
+            record_steps=True,
+        )
+        episode_rows.append(_greedy_episode_row(episode, rollout, env.modality_names, top_k))
+        step_rows.extend(steps)
+    return pd.DataFrame(episode_rows), pd.DataFrame(step_rows)
+
+
 def collect_dqn_trajectory_metrics(
     q_network: Any,
     env: EvidenceAcquisitionEnv,
@@ -392,23 +397,91 @@ def collect_dqn_trajectory_metrics(
     encoder: StateEncoder,
     max_steps_per_episode: int,
 ) -> pd.DataFrame:
-    rows = []
-    for episode in episodes:
-        rollout = _run_greedy_dqn_episode(q_network, env, episode, encoder, max_steps_per_episode)
-        row: dict[str, float | int | str] = {
-            "episode_id": rollout.episode_id,
-            "cell_line_id": rollout.cell_line_id,
-            "selected_gene": rollout.selected_gene,
-            "selected_index": rollout.selected_index,
-            "selected_dependency": rollout.selected_dependency,
-            "query_cost": rollout.query_cost,
-            "n_queries": rollout.n_queries,
-            "total_reward": rollout.total_reward,
-        }
-        for modality_name in env.modality_names:
-            row[f"n_query_{modality_name}"] = rollout.modality_query_counts.get(modality_name, 0)
-        rows.append(row)
+    rows = [
+        _greedy_episode_row(
+            episode,
+            _run_greedy_dqn_episode(q_network, env, episode, encoder, max_steps_per_episode),
+            env.modality_names,
+        )
+        for episode in episodes
+    ]
     return pd.DataFrame(rows)
+
+
+def _prepare_dqn_setup(
+    config: BaselineConfig,
+    raw_data_dir: str | Path | None,
+    rl_config: RLTrainingConfig,
+) -> tuple[
+    list[CandidateEpisode],
+    list[CandidateEpisode],
+    list[CandidateEpisode],
+    EvidenceAcquisitionEnv,
+    StateEncoder,
+]:
+    data = _load_training_data(config, raw_data_dir)
+    train_episodes = _build_episode_set(config, data.dependency, rl_config.train_episodes, config.seed)
+    eval_episodes = _build_episode_set(
+        config,
+        data.dependency,
+        rl_config.eval_episodes,
+        config.seed + 1,
+    )
+    validation_episodes = _build_episode_set(
+        config,
+        data.dependency,
+        rl_config.validation_episodes,
+        config.seed + 2,
+    )
+    modalities = (
+        build_supervised_modality_scores(
+            data.dependency,
+            data.modalities,
+            train_cell_lines={episode.cell_line_id for episode in train_episodes},
+        )
+        if config.environment.use_supervised_modality_scores
+        else data.modalities
+    )
+    env = EvidenceAcquisitionEnv(
+        modalities,
+        query_costs=config.environment.query_costs,
+        repeated_query_penalty=config.environment.repeated_query_penalty,
+    )
+    encoder = StateEncoder(
+        n_genes=config.episodes.candidates_per_episode,
+        n_modalities=len(env.modality_names),
+    )
+    return train_episodes, eval_episodes, validation_episodes, env, encoder
+
+
+def _greedy_episode_row(
+    episode: CandidateEpisode,
+    rollout: DQNRollout,
+    modality_names: tuple[str, ...],
+    top_k: int | None = None,
+) -> dict[str, float | int | str | bool]:
+    row: dict[str, float | int | str | bool] = {
+        "episode_id": rollout.episode_id,
+        "cell_line_id": rollout.cell_line_id,
+        "selected_gene": rollout.selected_gene,
+        "selected_index": rollout.selected_index,
+        "selected_dependency": rollout.selected_dependency,
+        "query_cost": rollout.query_cost,
+        "n_queries": rollout.n_queries,
+        "total_reward": rollout.total_reward,
+        **{
+            f"n_query_{name}": rollout.modality_query_counts.get(name, 0)
+            for name in modality_names
+        },
+    }
+    if top_k is not None:
+        row["hit_at_k"] = hit_at_k(
+            list(episode.dependency_scores),
+            list(rollout.ranked_indices),
+            top_k,
+        )
+        row["dependency_regret"] = rollout.selected_dependency - min(episode.dependency_scores)
+    return row
 
 
 def _run_greedy_dqn_episode(
@@ -417,13 +490,17 @@ def _run_greedy_dqn_episode(
     episode: CandidateEpisode,
     encoder: StateEncoder,
     max_steps_per_episode: int,
-) -> DQNRollout:
+    record_steps: bool = False,
+) -> DQNRollout | tuple[DQNRollout, list[dict[str, float | int | str | None]]]:
     state = env.reset(episode)
     total_reward = 0.0
     query_cost = 0.0
     n_queries = 0
     modality_query_counts = {name: 0 for name in env.modality_names}
     selection_state = state
+    step_rows: list[dict[str, float | int | str | None]] = []
+    step_index = 0
+    selected_index = 0
 
     for _ in range(max_steps_per_episode):
         state_vector = encoder.encode(state)
@@ -433,6 +510,8 @@ def _run_greedy_dqn_episode(
             selection_state = state
         result = env.step(action)
         total_reward += result.reward
+        modality_name: str | None = None
+        observed_value: float | None = None
         if action.action_type == ActionType.QUERY:
             if action.modality_index is None:
                 raise ValueError("Query actions require a modality index.")
@@ -440,7 +519,22 @@ def _run_greedy_dqn_episode(
             query_cost -= result.reward
             n_queries += 1
             modality_query_counts[modality_name] += 1
+            observed_value = result.state.observed_values[action.gene_index][action.modality_index]
+        if record_steps:
+            step_rows.append(
+                _step_log_row(
+                    episode,
+                    step_index,
+                    action,
+                    modality_name,
+                    observed_value,
+                    query_cost,
+                    total_reward,
+                    n_queries,
+                )
+            )
         state = result.state
+        step_index += 1
         if result.done:
             selected_index = action.gene_index
             break
@@ -449,10 +543,23 @@ def _run_greedy_dqn_episode(
         selected_index = _force_select(q_network, env, encoder)
         result = env.step(env.select_action(selected_index))
         total_reward += result.reward
+        if record_steps:
+            step_rows.append(
+                _step_log_row(
+                    episode,
+                    step_index,
+                    env.select_action(selected_index),
+                    None,
+                    None,
+                    query_cost,
+                    total_reward,
+                    n_queries,
+                )
+            )
 
     ranked = _rank_select_actions(q_network, selection_state, encoder)
     selected_dependency = float(episode.dependency_scores[selected_index])
-    return DQNRollout(
+    rollout = DQNRollout(
         ranked_indices=tuple(ranked),
         selected_index=selected_index,
         selected_dependency=selected_dependency,
@@ -464,6 +571,40 @@ def _run_greedy_dqn_episode(
         cell_line_id=episode.cell_line_id,
         episode_id=episode.episode_id,
     )
+    if record_steps:
+        return rollout, step_rows
+    return rollout
+
+
+def _step_log_row(
+    episode: CandidateEpisode,
+    step: int,
+    action: Any,
+    modality_name: str | None,
+    observed_value: float | None,
+    cumulative_query_cost: float,
+    cumulative_reward: float,
+    n_queries_so_far: int,
+) -> dict[str, float | int | str | None]:
+    gene_index = action.gene_index
+    return {
+        "episode_id": episode.episode_id,
+        "cell_line_id": episode.cell_line_id,
+        "step": step,
+        "action_type": action.action_type.value,
+        "gene": episode.candidate_genes[gene_index],
+        "modality": modality_name,
+        "observed_value": observed_value,
+        "gene_true_rank": _true_dependency_rank(episode.dependency_scores, gene_index),
+        "n_queries_so_far": n_queries_so_far,
+        "cumulative_query_cost": cumulative_query_cost,
+        "cumulative_reward": cumulative_reward,
+    }
+
+
+def _true_dependency_rank(dependency_scores: tuple[float, ...], gene_index: int) -> int:
+    order = sorted(range(len(dependency_scores)), key=lambda index: dependency_scores[index])
+    return order.index(gene_index) + 1
 
 
 def _rank_select_actions(q_network: Any, state: Any, encoder: StateEncoder) -> list[int]:
@@ -661,17 +802,17 @@ def _wandb_training_logger(
 
     def log_row(row: dict[str, float | int]) -> None:
         episode = int(row["episode"])
-        if episode % log_interval != 0 and episode != final_episode:
-            return
-        run.log(
-            {
-                "train/total_reward": row["total_reward"],
-                "train/n_queries": row["n_queries"],
-                "train/epsilon": row["epsilon"],
-                "train/loss": row["loss"],
-            },
-            step=episode,
-        )
+        should_log_train = episode % log_interval == 0 or episode == final_episode
+        if should_log_train:
+            run.log(
+                {
+                    "train/total_reward": row["total_reward"],
+                    "train/n_queries": row["n_queries"],
+                    "train/epsilon": row["epsilon"],
+                    "train/loss": row["loss"],
+                },
+                step=episode,
+            )
         if "validation_total_reward" in row:
             run.log(
                 {

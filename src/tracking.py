@@ -88,3 +88,67 @@ def _wandb_table(results: pd.DataFrame) -> Any:
     import wandb
 
     return wandb.Table(dataframe=results)
+
+
+def log_dqn_behavior_results(
+    run: Any | None,
+    episodes_df: pd.DataFrame,
+    steps_df: pd.DataFrame,
+) -> None:
+    if run is None:
+        return
+
+    import wandb
+
+    run.log(
+        {
+            "dqn_episode_summary": wandb.Table(dataframe=episodes_df),
+            "dqn_step_log": wandb.Table(dataframe=steps_df),
+            "behavior/hit_rate": float(episodes_df["hit_at_k"].mean()),
+            "behavior/mean_n_queries": float(episodes_df["n_queries"].mean()),
+            "behavior/mean_dependency_regret": float(episodes_df["dependency_regret"].mean()),
+            "behavior/query_count_histogram": wandb.Histogram(episodes_df["n_queries"].tolist()),
+            "behavior/dependency_regret_histogram": wandb.Histogram(
+                episodes_df["dependency_regret"].tolist()
+            ),
+        }
+    )
+
+    modality_columns = [column for column in episodes_df.columns if column.startswith("n_query_")]
+    if modality_columns:
+        modality_rows = [
+            [column.removeprefix("n_query_"), float(episodes_df[column].mean())]
+            for column in modality_columns
+        ]
+        modality_table = wandb.Table(data=modality_rows, columns=["modality", "mean_queries"])
+        run.log(
+            {
+                "behavior/modality_usage": wandb.plot.bar(
+                    modality_table,
+                    "modality",
+                    "mean_queries",
+                    title="Mean queries per episode by modality",
+                )
+            }
+        )
+
+    query_steps = steps_df[steps_df["action_type"] == "query"]
+    if not query_steps.empty and "gene_true_rank" in query_steps.columns:
+        run.log(
+            {
+                "behavior/queried_gene_rank_histogram": wandb.Histogram(
+                    query_steps["gene_true_rank"].tolist()
+                ),
+                "behavior/queries_by_step": wandb.plot.histogram(
+                    wandb.Table(dataframe=query_steps[["step", "gene_true_rank"]]),
+                    "step",
+                    title="Query actions by step",
+                ),
+            }
+        )
+
+    run.summary["behavior/hit_rate"] = float(episodes_df["hit_at_k"].mean())
+    run.summary["behavior/mean_n_queries"] = float(episodes_df["n_queries"].mean())
+    run.summary["behavior/mean_dependency_regret"] = float(
+        episodes_df["dependency_regret"].mean()
+    )

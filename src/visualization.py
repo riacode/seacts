@@ -8,6 +8,19 @@ import pandas as pd
 
 
 METRIC_COLUMNS = ("hit_at_k", "ndcg_at_k", "mrr_at_k")
+DQN_POLICY = "rl_env_dqn"
+
+# Poster subset (7): bounds, budget baselines, strong fixed policy, learned, oracle.
+POSTER_POLICY_ORDER = (
+    "rl_env_random_select",
+    "rl_env_query_expression_budget_8_then_select",
+    "rl_env_query_expression_budget_12_then_select",
+    "rl_env_query_expression_then_select",
+    "rl_env_query_all_average_then_select",
+    DQN_POLICY,
+    "rl_env_oracle_select",
+)
+
 POLICY_LABELS = {
     "rl_env_oracle_select": "Oracle",
     "rl_env_random_select": "Random",
@@ -25,6 +38,9 @@ POLICY_LABELS = {
     "data_average_all_modalities": "Data all avg",
 }
 
+DQN_COLOR = "#C0392B"
+DQN_EDGE_WIDTH = 2.5
+
 
 def generate_baseline_figures(
     data_metrics_path: str | Path | None,
@@ -32,6 +48,7 @@ def generate_baseline_figures(
     output_dir: str | Path,
     dqn_metrics_path: str | Path | None = None,
     dqn_trajectory_path: str | Path | None = None,
+    poster_subset: bool = True,
 ) -> list[Path]:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -42,6 +59,8 @@ def generate_baseline_figures(
     dqn_trajectories = _read_metrics(dqn_trajectory_path)
 
     environment_comparison = _combine_environment_results(environment_results, dqn_results)
+    if environment_comparison is not None and poster_subset:
+        environment_comparison = _prepare_poster_frame(environment_comparison)
 
     figures: list[Path] = []
     if environment_comparison is not None:
@@ -51,6 +70,8 @@ def generate_baseline_figures(
 
     combined = _combine_results(data_results, environment_results, dqn_results)
     if combined is not None:
+        if poster_subset:
+            combined = _prepare_poster_frame(combined)
         figures.append(_plot_ranking_metrics(combined, output_path))
     if dqn_trajectories is not None:
         figures.append(_plot_dqn_query_count_distribution(dqn_trajectories, output_path))
@@ -71,6 +92,13 @@ def _read_metrics(path: str | Path | None) -> pd.DataFrame | None:
     if frame.empty:
         return None
     return frame
+
+
+def _prepare_poster_frame(results: pd.DataFrame) -> pd.DataFrame:
+    frame = results[results["policy"].isin(POSTER_POLICY_ORDER)].copy()
+    order = {policy: index for index, policy in enumerate(POSTER_POLICY_ORDER)}
+    frame["_sort"] = frame["policy"].map(order)
+    return frame.sort_values("_sort").drop(columns="_sort").reset_index(drop=True)
 
 
 def _combine_results(
@@ -112,34 +140,52 @@ def _plot_cost_vs_target_reward(results: pd.DataFrame, output_dir: Path) -> Path
     frame["target_reward"] = -frame["selected_dependency"]
 
     fig, ax = plt.subplots(figsize=(11, 6.5))
-    ax.scatter(frame["query_cost"], frame["target_reward"], s=80)
-    for offset_index, row in enumerate(frame.itertuples(index=False)):
-        y_offset = 7 if offset_index % 2 == 0 else -12
+    for index, row in enumerate(frame.itertuples(index=False)):
+        is_dqn = str(row.policy) == DQN_POLICY
+        ax.scatter(
+            row.query_cost,
+            row.target_reward,
+            s=220 if is_dqn else 90,
+            c=DQN_COLOR if is_dqn else "#4C72B0",
+            edgecolors="black",
+            linewidths=DQN_EDGE_WIDTH if is_dqn else 0.8,
+            zorder=3 if is_dqn else 2,
+        )
+        y_offset = 7 if index % 2 == 0 else -12
         ax.annotate(
             _short_policy_name(str(row.policy)),
             (float(row.query_cost), float(row.target_reward)),
             xytext=(7, y_offset),
             textcoords="offset points",
-            fontsize=7,
+            fontsize=8 if is_dqn else 7,
+            fontweight="bold" if is_dqn else "normal",
         )
     ax.set_xlabel("Query cost")
     ax.set_ylabel("Target reward (-selected dependency)")
-    ax.set_title("RL Environment Baselines: Cost vs Target Quality")
+    ax.set_title("Cost vs Target Quality")
     ax.grid(alpha=0.25)
     return _save(fig, output_dir / "environment_cost_vs_target_reward.png")
 
 
 def _plot_total_reward(results: pd.DataFrame, output_dir: Path) -> Path:
     plt = _pyplot()
-    frame = results.sort_values("total_reward", ascending=True).copy()
+    frame = results.iloc[::-1].reset_index(drop=True)
 
-    fig_height = max(5.5, len(frame) * 0.45)
+    fig_height = max(5.5, len(frame) * 0.55)
     fig, ax = plt.subplots(figsize=(10, fig_height))
     labels = [_short_policy_name(policy, max_width=14) for policy in frame["policy"]]
-    ax.barh(labels, frame["total_reward"])
+    colors = [DQN_COLOR if policy == DQN_POLICY else "#4C72B0" for policy in frame["policy"]]
+    edge_widths = [DQN_EDGE_WIDTH if policy == DQN_POLICY else 0.8 for policy in frame["policy"]]
+    bars = ax.barh(labels, frame["total_reward"], color=colors, edgecolor="black")
+    for bar, width in zip(bars, edge_widths, strict=True):
+        bar.set_linewidth(width)
+    for index, policy in enumerate(frame["policy"]):
+        if policy == DQN_POLICY:
+            ax.get_yticklabels()[index].set_fontweight("bold")
+            ax.get_yticklabels()[index].set_color(DQN_COLOR)
     ax.axvline(0.0, color="black", linewidth=1)
-    ax.set_xlabel("Total episode reward")
-    ax.set_title("RL Environment Baselines: Reward After Query Costs")
+    ax.set_xlabel("Total episode reward (target quality − query cost)")
+    ax.set_title("Total Reward After Query Costs")
     ax.grid(axis="x", alpha=0.25)
     return _save(fig, output_dir / "environment_total_reward.png")
 
@@ -147,19 +193,29 @@ def _plot_total_reward(results: pd.DataFrame, output_dir: Path) -> Path:
 def _plot_query_count_vs_hit_rate(results: pd.DataFrame, output_dir: Path) -> Path:
     plt = _pyplot()
     fig, ax = plt.subplots(figsize=(11, 6.5))
-    ax.scatter(results["n_queries"], results["hit_at_k"], s=80)
-    for offset_index, row in enumerate(results.itertuples(index=False)):
-        y_offset = 7 if offset_index % 2 == 0 else -12
+    for index, row in enumerate(results.itertuples(index=False)):
+        is_dqn = str(row.policy) == DQN_POLICY
+        ax.scatter(
+            row.n_queries,
+            row.hit_at_k,
+            s=220 if is_dqn else 90,
+            c=DQN_COLOR if is_dqn else "#4C72B0",
+            edgecolors="black",
+            linewidths=DQN_EDGE_WIDTH if is_dqn else 0.8,
+            zorder=3 if is_dqn else 2,
+        )
+        y_offset = 7 if index % 2 == 0 else -12
         ax.annotate(
             _short_policy_name(str(row.policy)),
             (float(row.n_queries), float(row.hit_at_k)),
             xytext=(7, y_offset),
             textcoords="offset points",
-            fontsize=7,
+            fontsize=8 if is_dqn else 7,
+            fontweight="bold" if is_dqn else "normal",
         )
     ax.set_xlabel("Number of evidence queries")
     ax.set_ylabel("Hit@k")
-    ax.set_title("RL Environment Baselines: Query Count vs Hit Rate")
+    ax.set_title("Query Count vs Hit Rate")
     ax.grid(alpha=0.25)
     return _save(fig, output_dir / "environment_queries_vs_hit_rate.png")
 
@@ -167,22 +223,41 @@ def _plot_query_count_vs_hit_rate(results: pd.DataFrame, output_dir: Path) -> Pa
 def _plot_ranking_metrics(results: pd.DataFrame, output_dir: Path) -> Path:
     plt = _pyplot()
     frame = results.copy()
+    metric_colors = ("#4C72B0", "#DD8452", "#55A868")
     policies = [_short_policy_name(policy, max_width=12) for policy in frame["policy"]]
     x_positions = list(range(len(frame)))
     width = 0.24
 
-    fig_width = max(12.0, len(frame) * 0.85)
-    fig, ax = plt.subplots(figsize=(fig_width, 6.5))
+    fig_width = max(10.0, len(frame) * 1.1)
+    fig, ax = plt.subplots(figsize=(fig_width, 7.0))
     for offset, metric in enumerate(METRIC_COLUMNS):
         xs = [x + (offset - 1) * width for x in x_positions]
-        ax.bar(xs, frame[metric], width=width, label=metric)
+        bar_colors = []
+        edge_colors = []
+        edge_widths = []
+        for policy in frame["policy"]:
+            if policy == DQN_POLICY:
+                bar_colors.append(metric_colors[offset])
+                edge_colors.append("black")
+                edge_widths.append(DQN_EDGE_WIDTH)
+            else:
+                bar_colors.append(metric_colors[offset])
+                edge_colors.append("black")
+                edge_widths.append(0.6)
+        bars = ax.bar(xs, frame[metric], width=width, label=metric, color=bar_colors, edgecolor=edge_colors)
+        for bar, edge_width in zip(bars, edge_widths, strict=True):
+            bar.set_linewidth(edge_width)
 
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(policies, rotation=45, ha="right", fontsize=8)
+    tick_labels = ax.set_xticklabels(policies, rotation=35, ha="right", fontsize=8)
+    for index, policy in enumerate(frame["policy"]):
+        if policy == DQN_POLICY:
+            tick_labels[index].set_fontweight("bold")
+            tick_labels[index].set_color(DQN_COLOR)
     ax.set_ylim(0.0, 1.05)
     ax.set_ylabel("Metric value")
-    ax.set_title("Baseline Ranking Metrics")
-    ax.legend()
+    ax.set_title("Ranking Metrics")
+    ax.legend(loc="upper left")
     ax.grid(axis="y", alpha=0.25)
     return _save(fig, output_dir / "baseline_ranking_metrics.png")
 
@@ -192,7 +267,14 @@ def _plot_dqn_query_count_distribution(results: pd.DataFrame, output_dir: Path) 
     fig, ax = plt.subplots(figsize=(9, 5.5))
     max_queries = int(results["n_queries"].max()) if not results.empty else 0
     bins = range(0, max_queries + 2)
-    ax.hist(results["n_queries"], bins=bins, align="left", edgecolor="black")
+    ax.hist(
+        results["n_queries"],
+        bins=bins,
+        align="left",
+        edgecolor="black",
+        color=DQN_COLOR,
+        linewidth=1.2,
+    )
     ax.set_xlabel("Number of evidence queries")
     ax.set_ylabel("Episodes")
     ax.set_title("DQN Query Count Distribution")
@@ -207,7 +289,7 @@ def _plot_dqn_modality_usage(results: pd.DataFrame, output_dir: Path) -> Path:
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
     labels = [column.removeprefix("n_query_").replace("_", "\n") for column in usage.index]
-    ax.barh(labels, usage.values)
+    ax.barh(labels, usage.values, color=DQN_COLOR, edgecolor="black", linewidth=1.0)
     ax.set_xlabel("Mean queries per episode")
     ax.set_title("DQN Modality Usage")
     ax.grid(axis="x", alpha=0.25)

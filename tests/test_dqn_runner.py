@@ -16,6 +16,8 @@ from src.replay_buffer import ReplayBuffer, Transition
 from src.rl_runner import (
     RLTrainingConfig,
     _log_dqn_to_wandb,
+    _wandb_training_logger,
+    collect_dqn_behavior_log,
     collect_dqn_trajectory_metrics,
     evaluate_dqn_agent,
     seed_replay_with_modality_expert,
@@ -126,6 +128,43 @@ def test_collect_dqn_trajectory_metrics_returns_per_episode_rows() -> None:
         "n_queries",
         "n_query_expression",
     }.issubset(trajectories.columns)
+
+
+def test_collect_dqn_behavior_log_records_step_actions() -> None:
+    pytest.importorskip("torch")
+
+    env = _env()
+    encoder = StateEncoder(n_genes=2, n_modalities=1)
+    network, _ = train_dqn_agent(
+        env=env,
+        episodes=_episodes(),
+        encoder=encoder,
+        hyperparameters=DQNHyperparameters(
+            hidden_dim=16,
+            batch_size=2,
+            replay_capacity=20,
+            learning_starts=2,
+            train_frequency=1,
+            target_update_steps=2,
+            max_steps_per_episode=3,
+            epsilon_decay_steps=1,
+        ),
+        seed=0,
+    )
+
+    episodes_df, steps_df = collect_dqn_behavior_log(
+        q_network=network,
+        env=env,
+        episodes=_episodes(),
+        encoder=encoder,
+        top_k=1,
+        max_steps_per_episode=3,
+    )
+
+    assert len(episodes_df) == 2
+    assert not steps_df.empty
+    assert {"hit_at_k", "dependency_regret"}.issubset(episodes_df.columns)
+    assert {"step", "action_type", "gene", "modality", "gene_true_rank"}.issubset(steps_df.columns)
 
 
 def test_optimize_dqn_batch_uses_double_dqn_target_selection() -> None:
@@ -298,3 +337,41 @@ def test_wandb_logging_records_training_history_steps(monkeypatch, tmp_path: Pat
         "train/final_loss": 0.5,
         "eval/total_reward": 0.5,
     }
+
+
+def test_wandb_training_logger_logs_validation_off_train_log_interval() -> None:
+    logged: list[tuple[dict, int | None]] = []
+
+    class FakeRun:
+        def log(self, data, step=None):
+            logged.append((data, step))
+
+    logger = _wandb_training_logger(
+        FakeRun(),
+        RLTrainingConfig(wandb_log_interval=25, train_episodes=10_000, validation_interval=100),
+    )
+    logger(
+        {
+            "episode": 99,
+            "total_reward": 0.5,
+            "n_queries": 5,
+            "epsilon": 0.9,
+            "loss": 0.1,
+            "validation_total_reward": 0.8,
+            "validation_n_queries": 9.0,
+            "validation_selected_dependency": -1.0,
+            "validation_hit_at_k": 0.95,
+        }
+    )
+
+    assert logged == [
+        (
+            {
+                "validation/total_reward": 0.8,
+                "validation/n_queries": 9.0,
+                "validation/selected_dependency": -1.0,
+                "validation/hit_at_k": 0.95,
+            },
+            99,
+        )
+    ]
