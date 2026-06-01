@@ -1,0 +1,11 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+495,ACH-001547,HSPA2,0.0876838431969099,1.594168999423884,0.0,19,0.38,-0.46768384319691,7,2,6,4,Pleura,Pleural Mesothelioma,"Pleural Mesothelioma, Epithelioid Type"
+416,ACH-000356,BARD1,-0.2690685847252186,1.3575369295318451,0.0,15,0.3,-0.0309314152747813,4,6,2,3,Esophagus/Stomach,Esophagogastric Adenocarcinoma,Diffuse Type Stomach Adenocarcinoma
+150,ACH-000766,ZNF407,-0.1878265583161328,1.253747942402617,0.0,11,0.2199999999999999,-0.0321734416838671,3,3,3,2,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+438,ACH-000953,TENT4B,0.1870904335043006,0.9573348564705632,0.0,31,0.6200000000000002,-0.8070904335043008,8,5,10,8,Lymphoid,T-Lymphoblastic Leukemia/Lymphoma,T-Cell Acute Lymphoblastic Leukemia
+226,ACH-001205,MYH9,-0.1129081994379621,0.9455854312840322,0.0,22,0.4400000000000001,-0.327091800562038,7,4,8,3,Bone,Ewing Sarcoma,Ewing Sarcoma
+453,ACH-000371,IDH2,0.0934282513173304,0.9333582814095204,0.0,32,0.6400000000000002,-0.7334282513173307,8,9,8,7,Lymphoid,Mature B-Cell Neoplasms,"Diffuse Large B-Cell Lymphoma, NOS"
+227,ACH-000302,RPS6KA4,-0.0537350161486708,0.8550137057274008,0.0,32,0.6400000000000002,-0.5862649838513294,8,10,6,8,Uterus,Endometrial Carcinoma,Uterine Carcinosarcoma/Uterine Malignant Mixed Mullerian Tumor
+467,ACH-001699,ANKRD11,0.044692327821691,0.8321562428480285,0.0,16,0.32,-0.364692327821691,4,5,4,3,Head and Neck,Head and Neck Squamous Cell Carcinoma,Oral Cavity Squamous Cell Carcinoma
+326,ACH-002055,APC,-0.3874158416734984,0.6241607310412934,0.0,15,0.3,0.0874158416734984,5,1,5,4,Lymphoid,Mature B-Cell Neoplasms,Burkitt Lymphoma
+314,ACH-000148,CPLANE1,-0.033564952437626,0.5694207589008979,0.0,32,0.6400000000000002,-0.6064350475623742,5,12,7,8,Breast,Invasive Breast Carcinoma,"Breast Invasive Carcinoma, NOS"

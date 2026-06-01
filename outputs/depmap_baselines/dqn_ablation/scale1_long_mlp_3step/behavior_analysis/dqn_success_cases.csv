@@ -1,0 +1,21 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+2,ACH-000172,CHD4,-1.2336927489255478,0.0,1.0,8,0.16,1.073692748925548,3,1,3,1,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+3,ACH-000422,MYC,-2.084482650782212,0.0,1.0,8,0.16,1.924482650782212,4,1,1,2,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+4,ACH-000845,CHD4,-0.7769531642632684,0.0,1.0,8,0.16,0.6169531642632684,3,1,4,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+5,ACH-000444,DHPS,-1.284714993462327,0.0,1.0,8,0.16,1.124714993462327,4,1,2,1,Lung,Non-Small Cell Lung Cancer,Giant Cell Carcinoma of the Lung
+7,ACH-000302,EIF1AX,-2.678016289084915,0.0,1.0,8,0.16,2.518016289084915,4,1,1,2,Uterus,Endometrial Carcinoma,Uterine Carcinosarcoma/Uterine Malignant Mixed Mullerian Tumor
+9,ACH-001528,RAC1,-0.8978636403728549,0.0,1.0,8,0.16,0.7378636403728549,1,1,5,1,Thyroid,Well-Differentiated Thyroid Cancer,Papillary Thyroid Cancer
+14,ACH-000915,NCAPD2,-0.9890518222404616,0.0,1.0,8,0.16,0.8290518222404616,1,3,4,0,Skin,Melanoma,Cutaneous Melanoma
+17,ACH-000323,EIF1AX,-2.2139732514964847,0.0,1.0,8,0.16,2.053973251496485,3,1,2,2,CNS/Brain,Adult-Type Diffuse Glioma,"Glioblastoma, IDH-Wildtype"
+18,ACH-000172,CCND1,-0.9123303606210482,0.0,1.0,8,0.16,0.7523303606210482,3,1,2,2,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+22,ACH-000191,PPP2R1A,-1.459626209444615,0.0,1.0,8,0.16,1.2996262094446152,2,3,2,1,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+27,ACH-000030,H3-3A,-1.8741200531751503,0.0,1.0,8,0.16,1.7141200531751504,3,3,1,1,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+28,ACH-000011,BRCA1,-0.7222294381842663,0.0,1.0,8,0.16,0.5622294381842663,1,2,5,0,Bladder/Urinary Tract,Bladder Urothelial Carcinoma,Bladder Urothelial Carcinoma
+35,ACH-001054,POLE,-1.9576637284618617,0.0,1.0,8,0.16,1.7976637284618615,1,2,4,1,CNS/Brain,Embryonal Tumor,"Medulloblastoma, Group 3"
+36,ACH-000144,PCBP1,-1.8443416735635787,0.0,1.0,8,0.16,1.6843416735635788,4,1,1,2,Esophagus/Stomach,Esophagogastric Adenocarcinoma,Stomach Adenocarcinoma
+37,ACH-000422,ERCC3,-1.1951280963734892,0.0,1.0,8,0.16,1.0351280963734892,2,1,5,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+40,ACH-000381,CTCF,-2.018059979473116,0.0,1.0,8,0.16,1.858059979473116,2,3,1,2,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+43,ACH-000390,RFC5,-0.9944569105316534,0.0,1.0,8,0.16,0.8344569105316534,2,2,4,0,Lung,Non-Small Cell Lung Cancer,Lung Squamous Cell Carcinoma
+52,ACH-001737,NCAPD2,-1.2292886273848118,0.0,1.0,8,0.16,1.069288627384812,2,1,5,0,Lymphoid,T-Lymphoblastic Leukemia/Lymphoma,T-Cell Acute Lymphoblastic Leukemia
+59,ACH-000637,XRCC5,-0.7996193882507213,0.0,1.0,8,0.16,0.6396193882507213,2,2,4,0,Esophagus/Stomach,Esophageal Squamous Cell Carcinoma,Esophageal Squamous Cell Carcinoma
+62,ACH-000541,KIF18A,-0.9781356037448176,0.0,1.0,8,0.16,0.8181356037448175,1,2,4,1,Lymphoid,Mature B-Cell Neoplasms,Plasma Cell Myeloma

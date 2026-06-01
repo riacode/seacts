@@ -200,8 +200,12 @@ def build_environment_policies(modality_names: tuple[str, ...], seed: int) -> li
         OracleSelectPolicy(),
     ]
     policies.extend(QueryModalityPolicy(name) for name in modality_names)
-    if "expression" in modality_names:
-        policies.extend(QueryModalityBudgetPolicy("expression", budget) for budget in (4, 8, 12))
+    for modality_name in ("expression", "cna"):
+        if modality_name in modality_names:
+            policies.extend(
+                QueryModalityBudgetPolicy(modality_name, budget)
+                for budget in (4, 8, 12)
+            )
     policies.append(QueryAllAveragePolicy())
     return policies
 

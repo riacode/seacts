@@ -1,0 +1,21 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+2,ACH-000172,CHD4,-1.2336927489255478,0.0,1.0,8,0.16,1.073692748925548,8,0,0,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+3,ACH-000422,MYC,-2.084482650782212,0.0,1.0,8,0.16,1.924482650782212,5,0,3,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+4,ACH-000845,CHD4,-0.7769531642632684,0.0,1.0,8,0.16,0.6169531642632684,8,0,0,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+8,ACH-001205,TRAPPC8,-1.3488439380027129,0.0,1.0,8,0.16,1.188843938002713,6,0,2,0,Bone,Ewing Sarcoma,Ewing Sarcoma
+10,ACH-000478,H3-3A,-1.796293839012677,0.0,1.0,8,0.16,1.636293839012677,7,0,1,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+11,ACH-001307,H3-3A,-1.1690368672527214,0.0,1.0,8,0.16,1.0090368672527217,8,0,0,0,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+14,ACH-000915,NCAPD2,-0.9890518222404616,0.0,1.0,8,0.16,0.8290518222404616,8,0,0,0,Skin,Melanoma,Cutaneous Melanoma
+17,ACH-000323,EIF1AX,-2.2139732514964847,0.0,1.0,8,0.16,2.053973251496485,8,0,0,0,CNS/Brain,Adult-Type Diffuse Glioma,"Glioblastoma, IDH-Wildtype"
+18,ACH-000172,CCND1,-0.9123303606210482,0.0,1.0,8,0.16,0.7523303606210482,8,0,0,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+22,ACH-000191,PPP2R1A,-1.459626209444615,0.0,1.0,8,0.16,1.2996262094446152,7,0,1,0,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+27,ACH-000030,H3-3A,-1.8741200531751503,0.0,1.0,8,0.16,1.7141200531751504,7,0,1,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+33,ACH-000381,TRAPPC8,-0.9244750217013552,0.0,1.0,8,0.16,0.7644750217013552,8,0,0,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+37,ACH-000422,ERCC3,-1.1951280963734892,0.0,1.0,8,0.16,1.0351280963734892,8,0,0,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+40,ACH-000381,CTCF,-2.018059979473116,0.0,1.0,8,0.16,1.858059979473116,7,0,1,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+41,ACH-001547,CRNKL1,-1.7997859604277675,0.0,1.0,8,0.16,1.6397859604277676,8,0,0,0,Pleura,Pleural Mesothelioma,"Pleural Mesothelioma, Epithelioid Type"
+52,ACH-001737,NCAPD2,-1.2292886273848118,0.0,1.0,8,0.16,1.069288627384812,7,0,1,0,Lymphoid,T-Lymphoblastic Leukemia/Lymphoma,T-Cell Acute Lymphoblastic Leukemia
+61,ACH-000541,PPP2R1A,-0.7806288599017575,0.0,1.0,8,0.16,0.6206288599017574,8,0,0,0,Lymphoid,Mature B-Cell Neoplasms,Plasma Cell Myeloma
+71,ACH-000627,CRNKL1,-1.887053914645609,0.0,1.0,8,0.16,1.727053914645609,8,0,0,0,Lung,Non-Small Cell Lung Cancer,Large Cell Lung Carcinoma
+75,ACH-000391,XPO1,-2.1431936986674085,0.0,1.0,8,0.16,1.9831936986674088,8,0,0,0,Bone,Ewing Sarcoma,Ewing Sarcoma
+76,ACH-000581,SON,-1.1742886265177634,0.0,1.0,8,0.16,1.0142886265177635,8,0,0,0,Esophagus/Stomach,Esophagogastric Adenocarcinoma,Stomach Adenocarcinoma

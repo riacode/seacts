@@ -19,12 +19,12 @@ def plot_results_figures() -> list[str]:
         data_metrics_path="/root/seacts/results/depmap_baselines/data_baseline_metrics.csv",
         environment_metrics_path="/root/seacts/results/depmap_baselines/environment_baseline_metrics.csv",
         dqn_metrics_path=(
-            "/root/seacts/results/depmap_baselines/dqn_ablation/"
-            "scale1_long_structured_1step/dqn_eval_metrics.csv"
+            "/root/seacts/results/depmap_baselines/dqn_sweeps/"
+            "best_structured_1step_larger/dqn_eval_metrics.csv"
         ),
         dqn_trajectory_path=(
-            "/root/seacts/results/depmap_baselines/dqn_ablation/"
-            "scale1_long_structured_1step/dqn_trajectory_metrics.csv"
+            "/root/seacts/results/depmap_baselines/dqn_sweeps/"
+            "best_structured_1step_larger/dqn_trajectory_metrics.csv"
         ),
         output_dir="/root/seacts/results/figures",
     )

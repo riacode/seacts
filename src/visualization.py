@@ -12,13 +12,12 @@ from src.behavior_analysis import summarize_query_efficiency
 METRIC_COLUMNS = ("hit_at_k", "ndcg_at_k", "mrr_at_k")
 DQN_POLICY = "rl_env_dqn"
 
-# Poster subset (7): bounds, budget baselines, strong fixed policy, learned, oracle.
+# Poster/report subset: match the sequential comparison table in the README.
 POSTER_POLICY_ORDER = (
     "rl_env_random_select",
-    "rl_env_query_expression_budget_8_then_select",
-    "rl_env_query_expression_budget_12_then_select",
+    "rl_env_query_cna_budget_12_then_select",
     "rl_env_query_expression_then_select",
-    "rl_env_query_all_average_then_select",
+    "rl_env_query_cna_then_select",
     DQN_POLICY,
     "rl_env_oracle_select",
 )
@@ -26,7 +25,7 @@ POSTER_POLICY_ORDER = (
 POLICY_LABELS = {
     "rl_env_oracle_select": "Oracle",
     "rl_env_random_select": "Random",
-    "rl_env_dqn": "DQN",
+    "rl_env_dqn": "Structured DQN",
     "rl_env_query_all_average_then_select": "All avg",
     "rl_env_query_expression_then_select": "Expr full",
     "rl_env_query_cna_then_select": "CNA full",
@@ -35,6 +34,9 @@ POLICY_LABELS = {
     "rl_env_query_expression_budget_4_then_select": "Expr budget 4",
     "rl_env_query_expression_budget_8_then_select": "Expr budget 8",
     "rl_env_query_expression_budget_12_then_select": "Expr budget 12",
+    "rl_env_query_cna_budget_4_then_select": "CNA budget 4",
+    "rl_env_query_cna_budget_8_then_select": "CNA budget 8",
+    "rl_env_query_cna_budget_12_then_select": "CNA budget 12",
     "data_oracle_dependency": "Data oracle",
     "data_random_select": "Data random",
     "data_average_all_modalities": "Data all avg",
@@ -261,8 +263,18 @@ def _plot_total_reward(results: pd.DataFrame, output_dir: Path) -> Path:
 
 def _plot_query_count_vs_hit_rate(results: pd.DataFrame, output_dir: Path) -> Path:
     plt = _pyplot()
+    frame = results[results["policy"] != "rl_env_query_all_average_then_select"].copy()
     fig, ax = plt.subplots(figsize=(11, 6.5))
-    for index, row in enumerate(results.itertuples(index=False)):
+    label_offsets = {
+        DQN_POLICY: (9, 10),
+        "rl_env_query_expression_then_select": (10, -15),
+        "rl_env_query_expression_budget_12_then_select": (10, 6),
+        "rl_env_query_cna_budget_12_then_select": (10, -16),
+        "rl_env_query_expression_budget_8_then_select": (10, -10),
+        "rl_env_oracle_select": (8, 8),
+        "rl_env_random_select": (8, 8),
+    }
+    for index, row in enumerate(frame.itertuples(index=False)):
         is_dqn = str(row.policy) == DQN_POLICY
         ax.scatter(
             row.n_queries,
@@ -273,11 +285,11 @@ def _plot_query_count_vs_hit_rate(results: pd.DataFrame, output_dir: Path) -> Pa
             linewidths=DQN_EDGE_WIDTH if is_dqn else 0.8,
             zorder=3 if is_dqn else 2,
         )
-        y_offset = 7 if index % 2 == 0 else -12
+        offset = label_offsets.get(str(row.policy), (7, 7 if index % 2 == 0 else -12))
         ax.annotate(
             _short_policy_name(str(row.policy)),
             (float(row.n_queries), float(row.hit_at_k)),
-            xytext=(7, y_offset),
+            xytext=offset,
             textcoords="offset points",
             fontsize=8 if is_dqn else 7,
             fontweight="bold" if is_dqn else "normal",
@@ -414,7 +426,7 @@ def _plot_dqn_query_count_distribution(results: pd.DataFrame, output_dir: Path) 
     )
     ax.set_xlabel("Number of evidence queries")
     ax.set_ylabel("Episodes")
-    ax.set_title("DQN Query Count Distribution")
+    ax.set_title("Best Structured DQN Query Count Distribution")
     ax.grid(axis="y", alpha=0.25)
     return _save(fig, output_dir / "dqn_query_count_distribution.png")
 
@@ -428,7 +440,7 @@ def _plot_dqn_modality_usage(results: pd.DataFrame, output_dir: Path) -> Path:
     labels = [column.removeprefix("n_query_").replace("_", "\n") for column in usage.index]
     ax.barh(labels, usage.values, color=DQN_COLOR, edgecolor="black", linewidth=1.0)
     ax.set_xlabel("Mean queries per episode")
-    ax.set_title("DQN Modality Usage")
+    ax.set_title("Best Structured DQN Modality Usage")
     ax.grid(axis="x", alpha=0.25)
     return _save(fig, output_dir / "dqn_modality_usage.png")
 

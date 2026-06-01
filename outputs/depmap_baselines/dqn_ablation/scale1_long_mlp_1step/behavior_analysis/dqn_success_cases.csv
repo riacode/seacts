@@ -1,0 +1,21 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+1,ACH-000552,KIF18A,-3.3760423938541426,0.0,1.0,8,0.16,3.2160423938541425,3,1,3,1,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+10,ACH-000478,H3-3A,-1.796293839012677,0.0,1.0,8,0.16,1.636293839012677,3,2,1,2,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+12,ACH-000959,KIF18A,-1.699575166073721,0.0,1.0,8,0.16,1.5395751660737211,2,1,3,2,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+24,ACH-000097,POLE,-1.488831150147397,0.0,1.0,8,0.16,1.328831150147397,2,3,2,1,Breast,Invasive Breast Carcinoma,Breast Invasive Ductal Carcinoma
+44,ACH-000718,SMC4,-1.2303792977193495,0.0,1.0,8,0.16,1.0703792977193496,3,3,2,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+50,ACH-001431,PCBP1,-0.9929967534320622,0.0,1.0,8,0.16,0.8329967534320621,4,2,1,1,Bone,Ewing Sarcoma,Ewing Sarcoma
+52,ACH-001737,NCAPD2,-1.2292886273848118,0.0,1.0,8,0.16,1.069288627384812,3,2,2,1,Lymphoid,T-Lymphoblastic Leukemia/Lymphoma,T-Cell Acute Lymphoblastic Leukemia
+64,ACH-002142,SRSF2,-2.319153720515064,0.0,1.0,8,0.16,2.159153720515064,2,3,2,1,Bone,Osteosarcoma,Osteosarcoma
+73,ACH-000018,CHD4,-1.5445237450675986,0.0,1.0,8,0.16,1.384523745067599,2,2,3,1,Bladder/Urinary Tract,Bladder Urothelial Carcinoma,Bladder Urothelial Carcinoma
+92,ACH-001205,XPO1,-2.407398443438744,0.0,1.0,8,0.16,2.247398443438744,2,2,4,0,Bone,Ewing Sarcoma,Ewing Sarcoma
+100,ACH-000381,RFC5,-1.3096870223151686,0.0,1.0,8,0.16,1.1496870223151687,2,2,3,1,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+118,ACH-000697,SMARCB1,-1.103101556556783,0.0,1.0,8,0.16,0.943101556556783,3,1,3,1,Lymphoid,Mature B-Cell Neoplasms,"Diffuse Large B-Cell Lymphoma, NOS"
+125,ACH-000435,CENPN,-1.3138085117378966,0.0,1.0,8,0.16,1.153808511737897,4,2,2,0,Uterus,Endometrial Carcinoma,Endometrial Carcinoma
+142,ACH-000191,MTOR,-1.5200101364742378,0.0,1.0,8,0.16,1.360010136474238,2,1,3,2,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+143,ACH-001205,KIF18A,-1.3110815341011517,0.0,1.0,8,0.16,1.1510815341011518,3,1,3,1,Bone,Ewing Sarcoma,Ewing Sarcoma
+144,ACH-001054,DHX15,-1.706423910576649,0.0,1.0,8,0.16,1.546423910576649,1,2,3,2,CNS/Brain,Embryonal Tumor,"Medulloblastoma, Group 3"
+152,ACH-000552,TRRAP,-1.9918770997842723,0.0,1.0,8,0.16,1.8318770997842724,3,1,3,1,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+153,ACH-001791,XPO1,-1.731651520438891,0.0,1.0,8,0.16,1.571651520438891,2,1,2,3,Soft Tissue,Liposarcoma,Liposarcoma
+157,ACH-000290,TRRAP,-1.4776946644347249,0.0,1.0,8,0.16,1.317694664434725,2,1,3,2,Lung,Lung Neuroendocrine Tumor,Small Cell Lung Cancer
+167,ACH-000478,UPF2,-1.166028748892864,0.0,1.0,8,0.16,1.006028748892864,4,1,2,1,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma

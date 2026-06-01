@@ -1,0 +1,21 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+2,ACH-000172,CHD4,-1.2336927489255478,0.0,1.0,8,0.16,1.073692748925548,0,1,7,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+3,ACH-000422,MYC,-2.084482650782212,0.0,1.0,8,0.16,1.924482650782212,1,1,6,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+4,ACH-000845,CHD4,-0.7769531642632684,0.0,1.0,8,0.16,0.6169531642632684,0,1,7,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+8,ACH-001205,TRAPPC8,-1.3488439380027129,0.0,1.0,8,0.16,1.188843938002713,0,2,6,0,Bone,Ewing Sarcoma,Ewing Sarcoma
+9,ACH-001528,RAC1,-0.8978636403728549,0.0,1.0,8,0.16,0.7378636403728549,0,1,7,0,Thyroid,Well-Differentiated Thyroid Cancer,Papillary Thyroid Cancer
+10,ACH-000478,H3-3A,-1.796293839012677,0.0,1.0,8,0.16,1.636293839012677,0,1,4,3,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+11,ACH-001307,H3-3A,-1.1690368672527214,0.0,1.0,8,0.16,1.0090368672527217,0,1,5,2,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+14,ACH-000915,NCAPD2,-0.9890518222404616,0.0,1.0,8,0.16,0.8290518222404616,0,1,7,0,Skin,Melanoma,Cutaneous Melanoma
+18,ACH-000172,CCND1,-0.9123303606210482,0.0,1.0,8,0.16,0.7523303606210482,0,1,7,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+19,ACH-001702,MAX,-0.8335965869592336,0.0,1.0,8,0.16,0.6735965869592335,0,1,6,1,Soft Tissue,Epithelioid Sarcoma,Epithelioid Sarcoma
+20,ACH-000627,MAX,-0.826131733153858,0.0,1.0,8,0.16,0.666131733153858,0,1,7,0,Lung,Non-Small Cell Lung Cancer,Large Cell Lung Carcinoma
+22,ACH-000191,PPP2R1A,-1.459626209444615,0.0,1.0,8,0.16,1.2996262094446152,0,2,6,0,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+27,ACH-000030,H3-3A,-1.8741200531751503,0.0,1.0,8,0.16,1.7141200531751504,0,1,5,2,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+37,ACH-000422,ERCC3,-1.1951280963734892,0.0,1.0,8,0.16,1.0351280963734892,0,1,7,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+40,ACH-000381,CTCF,-2.018059979473116,0.0,1.0,8,0.16,1.858059979473116,0,1,6,1,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+41,ACH-001547,CRNKL1,-1.7997859604277675,0.0,1.0,8,0.16,1.6397859604277676,0,1,4,3,Pleura,Pleural Mesothelioma,"Pleural Mesothelioma, Epithelioid Type"
+42,ACH-001791,SMC5,-1.1281995911779523,0.0,1.0,8,0.16,0.9681995911779524,0,1,7,0,Soft Tissue,Liposarcoma,Liposarcoma
+50,ACH-001431,PCBP1,-0.9929967534320622,0.0,1.0,8,0.16,0.8329967534320621,0,1,7,0,Bone,Ewing Sarcoma,Ewing Sarcoma
+52,ACH-001737,NCAPD2,-1.2292886273848118,0.0,1.0,8,0.16,1.069288627384812,0,1,6,1,Lymphoid,T-Lymphoblastic Leukemia/Lymphoma,T-Cell Acute Lymphoblastic Leukemia
+59,ACH-000637,XRCC5,-0.7996193882507213,0.0,1.0,8,0.16,0.6396193882507213,1,1,6,0,Esophagus/Stomach,Esophageal Squamous Cell Carcinoma,Esophageal Squamous Cell Carcinoma

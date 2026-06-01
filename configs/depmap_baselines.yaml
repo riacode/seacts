@@ -30,7 +30,7 @@ environment:
     damaging_mutation: 0.02
     hotspot_mutation: 0.02
   repeated_query_penalty: 0.0
-  selection_reward_scale: 1.5
+  selection_reward_scale: 1.0
 
 rl_training:
   train_episodes: 10000

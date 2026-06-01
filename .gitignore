@@ -11,7 +11,7 @@ hw3 copy/
 data/raw/
 data/interim/
 data/processed/
-outputs/
+tests/
 
 .DS_Store
 .vscode/

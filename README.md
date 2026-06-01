@@ -98,17 +98,19 @@ candidate-modality pairs to query before selecting a final target.
 | Policy | Total reward | Selected dependency | Queries | Hit@k | NDCG@k | MRR@k |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Oracle select | 1.423 | -1.423 | 0.0 | 1.000 | 1.000 | 1.000 |
-| Structured DQN, 1-step | **1.023** | -1.261 | 11.9 | **1.000** | 0.829 | 0.760 |
+| Structured DQN, 1-step larger | **1.035** | -1.287 | 12.6 | **1.000** | 0.847 | 0.807 |
 | Query CNA full | 1.011 | -1.331 | 16.0 | 0.998 | 0.919 | 0.841 |
 | Query expression full | 1.005 | -1.325 | 16.0 | 0.998 | 0.921 | 0.842 |
-| Query expression budget 12 | 0.921 | -1.161 | 12.0 | 0.976 | 0.761 | 0.647 |
+| Query CNA budget 12 | 0.927 | -1.167 | 12.0 | 0.975 | 0.760 | 0.648 |
 | Random select | 0.164 | -0.164 | 0.0 | 0.483 | 0.221 | 0.104 |
 
 The learned policy slightly outperforms full CNA and full expression baselines
-on cost-adjusted reward while using about 25% fewer queries. The full-query
+on cost-adjusted reward while using about 21% fewer queries. The full-query
 baselines still select slightly stronger raw dependencies, but the policy
 achieves a better quality-cost tradeoff by stopping before exhaustive evidence
-collection.
+collection. This larger structured 1-step model is the best sweep variant; it
+uses a 256-dimensional hidden layer instead of the 128-dimensional hidden layer
+used by the default structured 1-step ablation model.
 
 ### DQN Ablation
 
@@ -122,14 +124,15 @@ collection.
 | MLP DQN, 3-step | 0.799 | -0.990 | 9.56 | 0.918 | 0.616 | 0.536 |
 
 The ablation suggests that candidate-structured Q-functions are the main source
-of improvement. The flat MLP must learn from a flattened state/action vector,
-whereas the structured network shares candidate representations across query
-and select actions and separates query/select scoring heads. This inductive
-bias improves evidence use and generalization. 3-step returns alone hurt
-the MLP, likely because they add target variance without enough action
-structure. Dueling helps most in the 3-step structured setting, where the value
-stream can stabilize estimates of partially observed evidence states, but it
-does not beat the simpler structured 1-step model on total reward.
+of improvement. The MLP DQN flattens the state and outputs one Q-value per
+action. The structured DQN instead encodes each candidate gene with its observed
+values and query mask, pools candidate encodings into an episode context, and
+uses separate query/select heads. This explicitly shares information across
+actions for the same gene and across repeated modality types. 3-step returns
+alone hurt the MLP, likely because they add target variance without enough
+action structure. Dueling helps most in the 3-step structured setting, where
+the value stream can stabilize partially observed state estimates, but it does
+not beat the simpler structured 1-step model on total reward.
 
 
 ## Setup
@@ -331,8 +334,8 @@ so train, validation, and evaluation episodes are sampled from disjoint eligible
 cell-line pools. This gives a stricter estimate of whether the learned evidence
 policy generalizes across cancer models rather than only across resampled
 candidate sets from the same models. The default environment uses equal
-normalized query costs and `selection_reward_scale: 1.5`, emphasizing target
-quality while retaining a per-query acquisition penalty.
+normalized query costs and `selection_reward_scale: 1.0`, matching the reported
+DQN ablation and sweep comparisons.
 
 ## DQN Behavior Analysis
 

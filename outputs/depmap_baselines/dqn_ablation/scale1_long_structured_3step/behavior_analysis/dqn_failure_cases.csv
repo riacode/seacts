@@ -1,0 +1,2 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+326,ACH-002055,BRCA2,-0.3205462460152229,0.691030326699569,0.0,11,0.2199999999999999,0.1005462460152229,0,2,9,0,Lymphoid,Mature B-Cell Neoplasms,Burkitt Lymphoma
