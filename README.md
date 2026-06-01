@@ -39,13 +39,13 @@ evidence acquisition for cancer target selection:
    matrices.
 5. RL environment baselines use the sequential `QUERY(gene, modality)` and
    `SELECT(gene)` API with normalized query costs, including fixed-budget
-   expression baselines for query-budget comparison.
+   expression and CNA baselines for query-budget comparison.
 6. The RL environment can replace raw modality values with simple supervised
    per-gene modality scores so queries reveal dependency-prediction evidence
    rather than uncalibrated raw omics values.
 7. A Double DQN policy trains on the same environment with action masking,
    replay, target networks, validation checkpointing, selection-aware
-   exploration, expression-expert replay seeding, and configurable cell-line
+   exploration, optional expert replay seeding, and configurable cell-line
    train/validation/evaluation splits.
 8. Metrics are logged to W&B and saved as CSVs, including selected dependency,
    Hit@k, NDCG@k, MRR@k, query cost, number of queries, modality usage, and
