@@ -15,6 +15,7 @@ class Transition:
     next_state: np.ndarray
     next_valid_actions: np.ndarray
     done: bool
+    n_steps: int = 1
 
 
 class ReplayBuffer:

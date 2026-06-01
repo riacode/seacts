@@ -28,6 +28,7 @@ from src.episodes import CandidateEpisode, EpisodeBuilder
 from src.metrics import hit_at_k, ndcg_at_k, reciprocal_rank_at_k
 from src.modality_scores import build_supervised_modality_scores
 from src.replay_buffer import ReplayBuffer, Transition
+from src.splits import CellLineSplitConfig, maybe_split_dependency_by_cell_line
 from src.state_encoder import StateEncoder
 
 
@@ -53,7 +54,16 @@ class RLTrainingConfig:
     validation_interval: int = 100
     expert_seed_episodes: int = 1_000
     expert_seed_modality: str = "expression"
+    expert_seed_strategy: str = "single_modality"
+    expert_seed_refinement_modality: str = "cna"
+    expert_seed_refinement_top_k: int = 4
+    min_queries_before_select: int = 0
+    n_step_returns: int = 1
+    q_network_type: str = "mlp"
     wandb_log_interval: int = 25
+    split_cell_lines: bool = False
+    validation_cell_line_fraction: float = 0.1
+    eval_cell_line_fraction: float = 0.1
 
     @property
     def hyperparameters(self) -> DQNHyperparameters:
@@ -75,6 +85,14 @@ class RLTrainingConfig:
             validation_interval=self.validation_interval,
             expert_seed_episodes=self.expert_seed_episodes,
             expert_seed_modality=self.expert_seed_modality,
+            expert_seed_strategy=self.expert_seed_strategy,
+            expert_seed_refinement_modality=self.expert_seed_refinement_modality,
+            expert_seed_refinement_top_k=self.expert_seed_refinement_top_k,
+            min_queries_before_select=self.min_queries_before_select,
+            n_step_returns=self.n_step_returns,
+            q_network_type=self.q_network_type,
+            n_genes=0,
+            n_modalities=0,
         )
 
 
@@ -96,6 +114,7 @@ def run_dqn_training_pipeline(
     config_path: str | Path,
     raw_data_dir: str | Path | None = None,
     output_dir: str | Path | None = None,
+    wandb_run_name: str = "dqn-training",
 ) -> tuple[pd.DataFrame, Path]:
     config = load_baseline_config(config_path)
     rl_config = load_rl_training_config(config_path)
@@ -112,7 +131,7 @@ def run_dqn_training_pipeline(
     output_path = resolved_output_dir / "dqn_eval_metrics.csv"
     trajectory_path = resolved_output_dir / "dqn_trajectory_metrics.csv"
 
-    with _wandb_dqn_run(config, config_path, rl_config, output_path) as wandb_run:
+    with _wandb_dqn_run(config, config_path, rl_config, output_path, run_name=wandb_run_name) as wandb_run:
         q_network, training_history = train_dqn_agent(
             env=env,
             episodes=train_episodes,
@@ -135,6 +154,7 @@ def run_dqn_training_pipeline(
             encoder=encoder,
             top_k=config.evaluation.top_k,
             max_steps_per_episode=rl_config.max_steps_per_episode,
+            min_queries_before_select=rl_config.min_queries_before_select,
         )
         results.to_csv(output_path, index=False)
         collect_dqn_trajectory_metrics(
@@ -143,6 +163,7 @@ def run_dqn_training_pipeline(
             episodes=eval_episodes,
             encoder=encoder,
             max_steps_per_episode=rl_config.max_steps_per_episode,
+            min_queries_before_select=rl_config.min_queries_before_select,
         ).to_csv(trajectory_path, index=False)
         _log_dqn_final_to_wandb(wandb_run, results, training_history, model_path)
     return results, output_path
@@ -175,7 +196,18 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         validation_interval=int(training.get("validation_interval", 100)),
         expert_seed_episodes=int(training.get("expert_seed_episodes", 1_000)),
         expert_seed_modality=str(training.get("expert_seed_modality", "expression")),
+        expert_seed_strategy=str(training.get("expert_seed_strategy", "single_modality")),
+        expert_seed_refinement_modality=str(
+            training.get("expert_seed_refinement_modality", "cna")
+        ),
+        expert_seed_refinement_top_k=int(training.get("expert_seed_refinement_top_k", 4)),
+        min_queries_before_select=int(training.get("min_queries_before_select", 0)),
+        n_step_returns=int(training.get("n_step_returns", 1)),
+        q_network_type=str(training.get("q_network_type", "mlp")),
         wandb_log_interval=int(training.get("wandb_log_interval", 25)),
+        split_cell_lines=bool(training.get("split_cell_lines", False)),
+        validation_cell_line_fraction=float(training.get("validation_cell_line_fraction", 0.1)),
+        eval_cell_line_fraction=float(training.get("eval_cell_line_fraction", 0.1)),
     )
 
 
@@ -198,23 +230,32 @@ def train_dqn_agent(
         encoder.state_size,
         encoder.action_space.size,
         hyperparameters.hidden_dim,
+        network_type=hyperparameters.q_network_type,
+        n_genes=encoder.n_genes,
+        n_modalities=encoder.n_modalities,
     )
     target_network = build_q_network(
         encoder.state_size,
         encoder.action_space.size,
         hyperparameters.hidden_dim,
+        network_type=hyperparameters.q_network_type,
+        n_genes=encoder.n_genes,
+        n_modalities=encoder.n_modalities,
     )
     target_network.load_state_dict(q_network.state_dict())
     optimizer = torch.optim.Adam(q_network.parameters(), lr=hyperparameters.learning_rate)
     replay = ReplayBuffer(hyperparameters.replay_capacity, seed=seed)
     rng = Random(seed)
     history: list[dict[str, float | int]] = []
-    expert_seeded = seed_replay_with_modality_expert(
+    expert_seeded = seed_replay_with_expert(
         replay=replay,
         env=env,
         episodes=episodes[: hyperparameters.expert_seed_episodes],
         encoder=encoder,
+        strategy=hyperparameters.expert_seed_strategy,
         modality_name=hyperparameters.expert_seed_modality,
+        refinement_modality_name=hyperparameters.expert_seed_refinement_modality,
+        refinement_top_k=hyperparameters.expert_seed_refinement_top_k,
     )
     global_step = expert_seeded
     best_validation_reward = float("-inf")
@@ -225,10 +266,17 @@ def train_dqn_agent(
         total_reward = 0.0
         query_count = 0
         losses: list[float] = []
+        episode_transitions: list[Transition] = []
 
         for step_in_episode in range(hyperparameters.max_steps_per_episode):
             state_vector = encoder.encode(state)
             valid_actions = encoder.valid_action_mask(state)
+            valid_actions = _apply_min_query_constraint(
+                valid_actions,
+                state,
+                encoder,
+                hyperparameters.min_queries_before_select,
+            )
             if step_in_episode == hyperparameters.max_steps_per_episode - 1:
                 valid_actions = _select_only_mask(encoder)
             epsilon = epsilon_by_step(global_step, hyperparameters)
@@ -245,15 +293,26 @@ def train_dqn_agent(
             result = env.step(action)
             next_state_vector = encoder.encode(result.state)
             next_valid_actions = encoder.valid_action_mask(result.state)
-            replay.append(
-                Transition(
-                    state=state_vector,
-                    action=action_index,
-                    reward=result.reward,
-                    next_state=next_state_vector,
-                    next_valid_actions=next_valid_actions,
-                    done=result.done,
-                )
+            next_valid_actions = _apply_min_query_constraint(
+                next_valid_actions,
+                result.state,
+                encoder,
+                hyperparameters.min_queries_before_select,
+            )
+            transition = Transition(
+                state=state_vector,
+                action=action_index,
+                reward=result.reward,
+                next_state=next_state_vector,
+                next_valid_actions=next_valid_actions,
+                done=result.done,
+            )
+            _append_n_step_transition(
+                replay,
+                episode_transitions,
+                transition,
+                hyperparameters.gamma,
+                hyperparameters.n_step_returns,
             )
 
             total_reward += result.reward
@@ -279,6 +338,11 @@ def train_dqn_agent(
                 target_network.load_state_dict(q_network.state_dict())
             if result.done:
                 break
+        _flush_n_step_transitions(
+            replay,
+            episode_transitions,
+            hyperparameters.gamma,
+        )
 
         row: dict[str, float | int] = {
             "episode": episode_number,
@@ -295,6 +359,7 @@ def train_dqn_agent(
                 encoder=encoder,
                 top_k=top_k,
                 max_steps_per_episode=hyperparameters.max_steps_per_episode,
+                min_queries_before_select=hyperparameters.min_queries_before_select,
             ).iloc[0]
             row.update(
                 {
@@ -323,12 +388,20 @@ def evaluate_dqn_agent(
     encoder: StateEncoder,
     top_k: int,
     max_steps_per_episode: int,
+    min_queries_before_select: int = 0,
 ) -> pd.DataFrame:
     if not episodes:
         raise ValueError("Cannot evaluate DQN on zero episodes.")
 
     rollouts = [
-        _run_greedy_dqn_episode(q_network, env, episode, encoder, max_steps_per_episode)
+        _run_greedy_dqn_episode(
+            q_network,
+            env,
+            episode,
+            encoder,
+            max_steps_per_episode,
+            min_queries_before_select=min_queries_before_select,
+        )
         for episode in episodes
     ]
     row: dict[str, float | str] = {
@@ -373,6 +446,7 @@ def collect_dqn_behavior_log(
     encoder: StateEncoder,
     top_k: int,
     max_steps_per_episode: int,
+    min_queries_before_select: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     episode_rows: list[dict[str, float | int | str | bool]] = []
     step_rows: list[dict[str, float | int | str | None]] = []
@@ -384,6 +458,7 @@ def collect_dqn_behavior_log(
             encoder,
             max_steps_per_episode,
             record_steps=True,
+            min_queries_before_select=min_queries_before_select,
         )
         episode_rows.append(_greedy_episode_row(episode, rollout, env.modality_names, top_k))
         step_rows.extend(steps)
@@ -396,11 +471,19 @@ def collect_dqn_trajectory_metrics(
     episodes: list[CandidateEpisode],
     encoder: StateEncoder,
     max_steps_per_episode: int,
+    min_queries_before_select: int = 0,
 ) -> pd.DataFrame:
     rows = [
         _greedy_episode_row(
             episode,
-            _run_greedy_dqn_episode(q_network, env, episode, encoder, max_steps_per_episode),
+            _run_greedy_dqn_episode(
+                q_network,
+                env,
+                episode,
+                encoder,
+                max_steps_per_episode,
+                min_queries_before_select=min_queries_before_select,
+            ),
             env.modality_names,
         )
         for episode in episodes
@@ -420,16 +503,30 @@ def _prepare_dqn_setup(
     StateEncoder,
 ]:
     data = _load_training_data(config, raw_data_dir)
-    train_episodes = _build_episode_set(config, data.dependency, rl_config.train_episodes, config.seed)
+    train_dependency = data.dependency
+    eval_dependency = data.dependency
+    validation_dependency = data.dependency
+    if rl_config.split_cell_lines:
+        train_dependency, validation_dependency, eval_dependency = maybe_split_dependency_by_cell_line(
+            config,
+            data.dependency,
+            CellLineSplitConfig(
+                enabled=True,
+                validation_fraction=rl_config.validation_cell_line_fraction,
+                eval_fraction=rl_config.eval_cell_line_fraction,
+            ),
+        )
+
+    train_episodes = _build_episode_set(config, train_dependency, rl_config.train_episodes, config.seed)
     eval_episodes = _build_episode_set(
         config,
-        data.dependency,
+        eval_dependency,
         rl_config.eval_episodes,
         config.seed + 1,
     )
     validation_episodes = _build_episode_set(
         config,
-        data.dependency,
+        validation_dependency,
         rl_config.validation_episodes,
         config.seed + 2,
     )
@@ -446,6 +543,7 @@ def _prepare_dqn_setup(
         modalities,
         query_costs=config.environment.query_costs,
         repeated_query_penalty=config.environment.repeated_query_penalty,
+        selection_reward_scale=config.environment.selection_reward_scale,
     )
     encoder = StateEncoder(
         n_genes=config.episodes.candidates_per_episode,
@@ -491,6 +589,7 @@ def _run_greedy_dqn_episode(
     encoder: StateEncoder,
     max_steps_per_episode: int,
     record_steps: bool = False,
+    min_queries_before_select: int = 0,
 ) -> DQNRollout | tuple[DQNRollout, list[dict[str, float | int | str | None]]]:
     state = env.reset(episode)
     total_reward = 0.0
@@ -504,7 +603,13 @@ def _run_greedy_dqn_episode(
 
     for _ in range(max_steps_per_episode):
         state_vector = encoder.encode(state)
-        action_index = select_greedy_action(q_network, state_vector, encoder.valid_action_mask(state))
+        valid_actions = _apply_min_query_constraint(
+            encoder.valid_action_mask(state),
+            state,
+            encoder,
+            min_queries_before_select,
+        )
+        action_index = select_greedy_action(q_network, state_vector, valid_actions)
         action = encoder.action_space.from_index(action_index)
         if action.action_type == ActionType.SELECT:
             selection_state = state
@@ -631,6 +736,68 @@ def _select_only_mask(encoder: StateEncoder) -> np.ndarray:
     return mask
 
 
+def _append_n_step_transition(
+    replay: ReplayBuffer,
+    pending: list[Transition],
+    transition: Transition,
+    gamma: float,
+    n_steps: int,
+) -> None:
+    pending.append(transition)
+    if len(pending) >= max(n_steps, 1):
+        replay.append(_collapse_n_step(pending[: max(n_steps, 1)], gamma))
+        pending.pop(0)
+
+
+def _flush_n_step_transitions(
+    replay: ReplayBuffer,
+    pending: list[Transition],
+    gamma: float,
+) -> None:
+    while pending:
+        replay.append(_collapse_n_step(pending, gamma))
+        pending.pop(0)
+
+
+def _collapse_n_step(transitions: list[Transition], gamma: float) -> Transition:
+    reward = 0.0
+    for offset, transition in enumerate(transitions):
+        reward += (gamma**offset) * transition.reward
+        if transition.done:
+            transitions = transitions[: offset + 1]
+            break
+    last = transitions[-1]
+    first = transitions[0]
+    return Transition(
+        state=first.state,
+        action=first.action,
+        reward=reward,
+        next_state=last.next_state,
+        next_valid_actions=last.next_valid_actions,
+        done=last.done,
+        n_steps=len(transitions),
+    )
+
+
+def _apply_min_query_constraint(
+    valid_actions: np.ndarray,
+    state: Any,
+    encoder: StateEncoder,
+    min_queries_before_select: int,
+) -> np.ndarray:
+    if min_queries_before_select <= 0 or state.done:
+        return valid_actions
+    n_queries = sum(int(observed) for row in state.query_mask for observed in row)
+    if n_queries >= min_queries_before_select:
+        return valid_actions
+
+    constrained = valid_actions.copy()
+    constrained[encoder.action_space.select_indices()] = False
+    if not constrained.any():
+        return valid_actions
+    return constrained
+
+
 def seed_replay_with_modality_expert(
     replay: ReplayBuffer,
     env: EvidenceAcquisitionEnv,
@@ -638,8 +805,56 @@ def seed_replay_with_modality_expert(
     encoder: StateEncoder,
     modality_name: str,
 ) -> int:
+    return seed_replay_with_expert(
+        replay=replay,
+        env=env,
+        episodes=episodes,
+        encoder=encoder,
+        strategy="single_modality",
+        modality_name=modality_name,
+    )
+
+
+def seed_replay_with_expert(
+    replay: ReplayBuffer,
+    env: EvidenceAcquisitionEnv,
+    episodes: list[CandidateEpisode],
+    encoder: StateEncoder,
+    strategy: str,
+    modality_name: str,
+    refinement_modality_name: str = "cna",
+    refinement_top_k: int = 4,
+) -> int:
     if not episodes:
         return 0
+    if strategy == "single_modality":
+        return _seed_replay_with_single_modality_expert(
+            replay,
+            env,
+            episodes,
+            encoder,
+            modality_name,
+        )
+    if strategy == "expression_full_then_refinement_top_k":
+        return _seed_replay_with_refinement_expert(
+            replay=replay,
+            env=env,
+            episodes=episodes,
+            encoder=encoder,
+            screening_modality_name=modality_name,
+            refinement_modality_name=refinement_modality_name,
+            refinement_top_k=refinement_top_k,
+        )
+    raise ValueError(f"Unknown expert seed strategy: {strategy}")
+
+
+def _seed_replay_with_single_modality_expert(
+    replay: ReplayBuffer,
+    env: EvidenceAcquisitionEnv,
+    episodes: list[CandidateEpisode],
+    encoder: StateEncoder,
+    modality_name: str,
+) -> int:
     try:
         modality_index = env.modality_names.index(modality_name)
     except ValueError:
@@ -683,6 +898,129 @@ def seed_replay_with_modality_expert(
         )
         n_transitions += 1
     return n_transitions
+
+
+def _seed_replay_with_refinement_expert(
+    replay: ReplayBuffer,
+    env: EvidenceAcquisitionEnv,
+    episodes: list[CandidateEpisode],
+    encoder: StateEncoder,
+    screening_modality_name: str,
+    refinement_modality_name: str,
+    refinement_top_k: int,
+) -> int:
+    try:
+        screening_index = env.modality_names.index(screening_modality_name)
+        refinement_index = env.modality_names.index(refinement_modality_name)
+    except ValueError:
+        return 0
+
+    n_transitions = 0
+    for episode in episodes:
+        state = env.reset(episode)
+        screening_scores: list[float] = []
+        for gene_index in range(len(episode.candidate_genes)):
+            result = _append_expert_transition(
+                replay,
+                env,
+                encoder,
+                state,
+                env.query_action(gene_index, screening_index),
+            )
+            screening_scores.append(
+                _rank_value(result.state.observed_values[gene_index][screening_index])
+            )
+            state = result.state
+            n_transitions += 1
+
+        top_indices = np.argsort(np.asarray(screening_scores, dtype=np.float32))[::-1][
+            : max(refinement_top_k, 0)
+        ]
+        for gene_index in top_indices:
+            result = _append_expert_transition(
+                replay,
+                env,
+                encoder,
+                state,
+                env.query_action(int(gene_index), refinement_index),
+            )
+            state = result.state
+            n_transitions += 1
+
+        selected_index = _select_by_standardized_observed_scores(
+            state.observed_values,
+            queried_modalities=(screening_index, refinement_index),
+        )
+        _append_expert_transition(
+            replay,
+            env,
+            encoder,
+            state,
+            env.select_action(selected_index),
+        )
+        n_transitions += 1
+    return n_transitions
+
+
+def _append_expert_transition(
+    replay: ReplayBuffer,
+    env: EvidenceAcquisitionEnv,
+    encoder: StateEncoder,
+    state: Any,
+    action: Any,
+) -> Any:
+    state_vector = encoder.encode(state)
+    result = env.step(action)
+    replay.append(
+        Transition(
+            state=state_vector,
+            action=encoder.action_space.to_index(action),
+            reward=result.reward,
+            next_state=encoder.encode(result.state),
+            next_valid_actions=encoder.valid_action_mask(result.state),
+            done=result.done,
+        )
+    )
+    return result
+
+
+def _select_by_standardized_observed_scores(
+    observed_values: tuple[tuple[float | None, ...], ...],
+    queried_modalities: tuple[int, ...],
+) -> int:
+    values_by_modality = {
+        modality_index: [
+            _rank_value(row[modality_index])
+            if row[modality_index] is not None and not pd.isna(row[modality_index])
+            else None
+            for row in observed_values
+        ]
+        for modality_index in queried_modalities
+    }
+    standardized = {
+        modality_index: _standardize_rank_values(values)
+        for modality_index, values in values_by_modality.items()
+    }
+    scores = []
+    for gene_index in range(len(observed_values)):
+        observed = [
+            values[gene_index]
+            for values in standardized.values()
+            if values[gene_index] is not None
+        ]
+        scores.append(mean(observed) if observed else float("-inf"))
+    return int(np.argmax(np.asarray(scores, dtype=np.float32)))
+
+
+def _standardize_rank_values(values: list[float | None]) -> list[float | None]:
+    observed = [float(value) for value in values if value is not None]
+    if not observed:
+        return values
+    center = mean(observed)
+    scale = float(np.std(np.asarray(observed, dtype=np.float32)))
+    if scale == 0.0:
+        return [0.0 if value is not None else None for value in values]
+    return [(float(value) - center) / scale if value is not None else None for value in values]
 
 
 def _rank_value(value: float | None) -> float:
@@ -763,6 +1101,7 @@ def _wandb_dqn_run(
     config_path: str | Path,
     rl_config: RLTrainingConfig,
     output_path: Path,
+    run_name: str = "dqn-training",
 ) -> Iterator[Any | None]:
     if not config.tracking.wandb.enabled:
         yield None
@@ -779,7 +1118,7 @@ def _wandb_dqn_run(
     with wandb.init(
         entity=config.tracking.wandb.entity,
         project=config.tracking.wandb.project,
-        name="dqn-training",
+        name=run_name,
         job_type="rl-training",
         config={
             "config_path": str(config_path),

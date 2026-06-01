@@ -34,6 +34,7 @@ class EnvironmentConfig:
     use_supervised_modality_scores: bool
     query_costs: dict[str, float]
     repeated_query_penalty: float
+    selection_reward_scale: float
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,7 @@ def load_baseline_config(path: str | Path) -> BaselineConfig:
                 for name, value in environment.get("query_costs", {}).items()
             },
             repeated_query_penalty=float(environment.get("repeated_query_penalty", 0.0)),
+            selection_reward_scale=float(environment.get("selection_reward_scale", 1.0)),
         ),
         tracking=TrackingConfig(
             wandb=WandbConfig(

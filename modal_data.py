@@ -1,17 +1,6 @@
 from __future__ import annotations
 
-import modal
-
-
-app = modal.App("seacts")
-
-image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install_from_requirements("requirements.txt")
-    .add_local_python_source("src")
-)
-
-data_volume = modal.Volume.from_name("seacts-data", create_if_missing=True)
+from src.modal_config import app, data_volume, image
 
 
 @app.function(image=image, volumes={"/root/seacts/data": data_volume}, timeout=3600)

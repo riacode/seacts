@@ -1,31 +1,16 @@
 from __future__ import annotations
 
-import modal
-
-
-app = modal.App("seacts")
-
-image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install_from_requirements("requirements.txt")
-    .add_local_file(
-        "configs/depmap_baselines.yaml",
-        remote_path="/root/seacts/configs/depmap_baselines.yaml",
-    )
-    .add_local_python_source("src")
-)
-
-data_volume = modal.Volume.from_name("seacts-data", create_if_missing=True)
-results_volume = modal.Volume.from_name("seacts-results", create_if_missing=True)
+from src.modal_config import REMOTE_CONFIG_PATH, app, configured_image, data_volume, results_volume
+from src.modal_config import wandb_secret
 
 
 @app.function(
-    image=image,
+    image=configured_image,
     volumes={
         "/root/seacts/data": data_volume,
         "/root/seacts/results": results_volume,
     },
-    secrets=[modal.Secret.from_name("wandb")],
+    secrets=[wandb_secret],
     timeout=7200,
 )
 def train_dqn() -> list[dict[str, float | str]]:
@@ -34,7 +19,7 @@ def train_dqn() -> list[dict[str, float | str]]:
     data_volume.reload()
     results_volume.reload()
     results, output_path = run_dqn_training_pipeline(
-        config_path="/root/seacts/configs/depmap_baselines.yaml",
+        config_path=REMOTE_CONFIG_PATH,
         raw_data_dir="/root/seacts/data/raw",
         output_dir="/root/seacts/results/depmap_baselines",
     )

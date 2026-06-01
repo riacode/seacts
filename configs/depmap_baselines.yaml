@@ -26,10 +26,11 @@ environment:
   # not literal assay prices.
   query_costs:
     expression: 0.02
-    cna: 0.03
-    damaging_mutation: 0.04
-    hotspot_mutation: 0.04
+    cna: 0.02
+    damaging_mutation: 0.02
+    hotspot_mutation: 0.02
   repeated_query_penalty: 0.0
+  selection_reward_scale: 1.5
 
 rl_training:
   train_episodes: 10000
@@ -50,9 +51,16 @@ rl_training:
   max_steps_per_episode: 32
   select_exploration_probability: 0.25
   validation_interval: 100
-  expert_seed_episodes: 1000
+  expert_seed_episodes: 0
   expert_seed_modality: expression
+  expert_seed_strategy: single_modality
+  expert_seed_refinement_modality: cna
+  expert_seed_refinement_top_k: 4
+  min_queries_before_select: 8
   wandb_log_interval: 25
+  split_cell_lines: true
+  validation_cell_line_fraction: 0.1
+  eval_cell_line_fraction: 0.1
 
 tracking:
   wandb:

@@ -5,6 +5,8 @@ from random import Random
 from typing import Any
 
 import numpy as np
+import torch
+import torch.nn as nn
 
 from src.replay_buffer import Transition
 
@@ -28,17 +30,127 @@ class DQNHyperparameters:
     validation_interval: int = 100
     expert_seed_episodes: int = 1_000
     expert_seed_modality: str = "expression"
+    expert_seed_strategy: str = "single_modality"
+    expert_seed_refinement_modality: str = "cna"
+    expert_seed_refinement_top_k: int = 4
+    min_queries_before_select: int = 0
+    n_step_returns: int = 1
+    q_network_type: str = "mlp"
+    n_genes: int = 0
+    n_modalities: int = 0
 
 
-def build_q_network(state_size: int, action_size: int, hidden_dim: int) -> Any:
+def build_q_network(
+    state_size: int,
+    action_size: int,
+    hidden_dim: int,
+    network_type: str = "mlp",
+    n_genes: int = 0,
+    n_modalities: int = 0,
+) -> Any:
     torch, nn, _ = _torch_modules()
-    return nn.Sequential(
-        nn.Linear(state_size, hidden_dim),
-        nn.ReLU(),
-        nn.Linear(hidden_dim, hidden_dim),
-        nn.ReLU(),
-        nn.Linear(hidden_dim, action_size),
-    )
+    if network_type == "mlp":
+        return nn.Sequential(
+            nn.Linear(state_size, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_size),
+        )
+    if network_type == "dueling_mlp":
+        return DuelingMLPQNetwork(state_size, action_size, hidden_dim)
+    if network_type == "structured":
+        return StructuredQNetwork(
+            n_genes=n_genes,
+            n_modalities=n_modalities,
+            hidden_dim=hidden_dim,
+            dueling=False,
+        )
+    if network_type == "structured_dueling":
+        return StructuredQNetwork(
+            n_genes=n_genes,
+            n_modalities=n_modalities,
+            hidden_dim=hidden_dim,
+            dueling=True,
+        )
+    raise ValueError(f"Unknown Q-network type: {network_type}")
+
+
+class DuelingMLPQNetwork(nn.Module):
+    def __init__(self, state_size: int, action_size: int, hidden_dim: int) -> None:
+        super().__init__()
+        self.trunk = nn.Sequential(
+            nn.Linear(state_size, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        self.value = nn.Linear(hidden_dim, 1)
+        self.advantage = nn.Linear(hidden_dim, action_size)
+
+    def forward(self, states: Any) -> Any:
+        features = self.trunk(states)
+        value = self.value(features)
+        advantage = self.advantage(features)
+        return value + advantage - advantage.mean(dim=1, keepdim=True)
+
+
+class StructuredQNetwork(nn.Module):
+    def __init__(
+        self,
+        n_genes: int,
+        n_modalities: int,
+        hidden_dim: int,
+        dueling: bool,
+    ) -> None:
+        super().__init__()
+        if n_genes <= 0 or n_modalities <= 0:
+            raise ValueError("Structured Q-networks require n_genes and n_modalities.")
+        self.n_genes = n_genes
+        self.n_modalities = n_modalities
+        self.dueling = dueling
+        self.per_candidate_size = n_modalities * 2 + 1
+        candidate_input_size = self.per_candidate_size + 1
+        self.candidate_encoder = nn.Sequential(
+            nn.Linear(candidate_input_size, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        head_input_size = hidden_dim * 2
+        self.query_head = nn.Linear(head_input_size, n_modalities)
+        self.select_head = nn.Linear(head_input_size, 1)
+        self.value_head = nn.Linear(hidden_dim + 1, 1) if dueling else None
+
+    def forward(self, states: Any) -> Any:
+        batch_size = states.shape[0]
+        candidate_flat_size = self.n_genes * self.per_candidate_size
+        candidate_features = states[:, :candidate_flat_size].reshape(
+            batch_size,
+            self.n_genes,
+            self.per_candidate_size,
+        )
+        done = states[:, candidate_flat_size:].reshape(batch_size, 1)
+        done_expanded = done.unsqueeze(1).expand(-1, self.n_genes, -1)
+        candidate_input = _torch_cat((candidate_features, done_expanded), dim=2)
+        encoded = self.candidate_encoder(candidate_input)
+        global_context = encoded.mean(dim=1)
+        global_expanded = global_context.unsqueeze(1).expand(-1, self.n_genes, -1)
+        head_input = _torch_cat((encoded, global_expanded), dim=2)
+        query_q = self.query_head(head_input).reshape(batch_size, self.n_genes * self.n_modalities)
+        select_q = self.select_head(head_input).squeeze(-1)
+        advantages = _torch_cat((query_q, select_q), dim=1)
+        if not self.dueling:
+            return advantages
+        if self.value_head is None:
+            raise RuntimeError("Dueling structured network is missing value_head.")
+        value_input = _torch_cat((global_context, done), dim=1)
+        value = self.value_head(value_input)
+        return value + advantages - advantages.mean(dim=1, keepdim=True)
+
+
+def _torch_cat(items: tuple[Any, ...], dim: int) -> Any:
+    return torch.cat(items, dim=dim)
 
 
 def select_epsilon_greedy_action(
@@ -108,7 +220,9 @@ def optimize_dqn_batch(
         next_actions = next_online_q.argmax(dim=1, keepdim=True)
         next_target_q = target_network(next_states).gather(1, next_actions).squeeze(1)
         next_target_q = torch.where(done, torch.zeros_like(next_target_q), next_target_q)
-        expected_q = rewards + gamma * next_target_q
+        n_steps = torch.as_tensor([item.n_steps for item in transitions], dtype=torch.float32)
+        discounts = torch.pow(torch.full_like(n_steps, gamma), n_steps)
+        expected_q = rewards + discounts * next_target_q
 
     loss = functional.smooth_l1_loss(current_q, expected_q)
     optimizer.zero_grad()

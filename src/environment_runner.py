@@ -10,6 +10,7 @@ from src.data import load_project_data
 from src.environment import EvidenceAcquisitionEnv
 from src.environment_baselines import build_environment_policies, evaluate_environment_policy
 from src.modality_scores import build_supervised_modality_scores
+from src.splits import load_cell_line_split_config, maybe_split_dependency_by_cell_line
 from src.tracking import log_baseline_results, wandb_baseline_run
 
 
@@ -30,12 +31,18 @@ def run_environment_baseline_pipeline(
         modality_paths=modality_paths,
         metadata_path=metadata_path,
     )
-    episodes = _build_episodes(config, data.dependency)
+    split_config = load_cell_line_split_config(config_path)
+    train_dependency, _, eval_dependency = maybe_split_dependency_by_cell_line(
+        config,
+        data.dependency,
+        split_config,
+    )
+    episodes = _build_episodes(config, eval_dependency)
     modalities = (
         build_supervised_modality_scores(
             data.dependency,
             data.modalities,
-            train_cell_lines={episode.cell_line_id for episode in episodes},
+            train_cell_lines=set(train_dependency.index.astype(str)),
         )
         if config.environment.use_supervised_modality_scores
         else data.modalities
@@ -44,6 +51,7 @@ def run_environment_baseline_pipeline(
         modalities,
         query_costs=config.environment.query_costs,
         repeated_query_penalty=config.environment.repeated_query_penalty,
+        selection_reward_scale=config.environment.selection_reward_scale,
     )
     policies = build_environment_policies(env.modality_names, seed=config.seed)
 

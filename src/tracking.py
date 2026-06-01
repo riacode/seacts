@@ -79,6 +79,7 @@ def _wandb_config(config: BaselineConfig, config_path: str | Path) -> dict[str, 
         "environment": {
             "query_costs": config.environment.query_costs,
             "repeated_query_penalty": config.environment.repeated_query_penalty,
+            "selection_reward_scale": config.environment.selection_reward_scale,
         },
         "output_dir": str(config.output_dir),
     }
@@ -94,25 +95,29 @@ def log_dqn_behavior_results(
     run: Any | None,
     episodes_df: pd.DataFrame,
     steps_df: pd.DataFrame,
+    analysis_tables: dict[str, pd.DataFrame] | None = None,
 ) -> None:
     if run is None:
         return
 
     import wandb
 
-    run.log(
-        {
-            "dqn_episode_summary": wandb.Table(dataframe=episodes_df),
-            "dqn_step_log": wandb.Table(dataframe=steps_df),
-            "behavior/hit_rate": float(episodes_df["hit_at_k"].mean()),
-            "behavior/mean_n_queries": float(episodes_df["n_queries"].mean()),
-            "behavior/mean_dependency_regret": float(episodes_df["dependency_regret"].mean()),
-            "behavior/query_count_histogram": wandb.Histogram(episodes_df["n_queries"].tolist()),
-            "behavior/dependency_regret_histogram": wandb.Histogram(
-                episodes_df["dependency_regret"].tolist()
-            ),
-        }
-    )
+    log_payload = {
+        "dqn_episode_summary": wandb.Table(dataframe=episodes_df),
+        "dqn_step_log": wandb.Table(dataframe=steps_df),
+        "behavior/hit_rate": float(episodes_df["hit_at_k"].mean()),
+        "behavior/mean_n_queries": float(episodes_df["n_queries"].mean()),
+        "behavior/mean_dependency_regret": float(episodes_df["dependency_regret"].mean()),
+        "behavior/query_count_histogram": wandb.Histogram(episodes_df["n_queries"].tolist()),
+        "behavior/dependency_regret_histogram": wandb.Histogram(
+            episodes_df["dependency_regret"].tolist()
+        ),
+    }
+    if analysis_tables:
+        for name, table in analysis_tables.items():
+            _add_behavior_analysis_to_wandb_payload(log_payload, wandb, name, table)
+
+    run.log(log_payload)
 
     modality_columns = [column for column in episodes_df.columns if column.startswith("n_query_")]
     if modality_columns:
@@ -152,3 +157,33 @@ def log_dqn_behavior_results(
     run.summary["behavior/mean_dependency_regret"] = float(
         episodes_df["dependency_regret"].mean()
     )
+
+
+def _add_behavior_analysis_to_wandb_payload(
+    payload: dict[str, Any],
+    wandb: Any,
+    name: str,
+    table: pd.DataFrame,
+) -> None:
+    if table.empty:
+        return
+
+    if name in {"dqn_failure_cases", "dqn_success_cases"}:
+        payload[f"behavior_analysis/{name}"] = wandb.Table(dataframe=table)
+        return
+
+    if name == "dqn_query_efficiency_by_true_rank":
+        efficiency_table = wandb.Table(dataframe=table)
+        payload["behavior_analysis/query_efficiency_by_true_rank"] = wandb.plot.bar(
+            efficiency_table,
+            "gene_true_rank",
+            "query_fraction",
+            title="Query fraction by true dependency rank",
+        )
+        return
+
+    if name == "dqn_modality_usage_by_context":
+        payload[f"behavior_analysis/{name}"] = wandb.Table(dataframe=table)
+        return
+
+    payload[f"behavior_analysis/{name}"] = wandb.Table(dataframe=table)

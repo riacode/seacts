@@ -49,6 +49,7 @@ class EvidenceAcquisitionEnv:
         modalities: dict[str, pd.DataFrame],
         query_costs: dict[str, float] | None = None,
         repeated_query_penalty: float = 0.0,
+        selection_reward_scale: float = 1.0,
     ) -> None:
         if not modalities:
             raise ValueError("EvidenceAcquisitionEnv requires at least one modality.")
@@ -59,6 +60,7 @@ class EvidenceAcquisitionEnv:
             for name in self.modality_names
         }
         self.repeated_query_penalty = float(repeated_query_penalty)
+        self.selection_reward_scale = float(selection_reward_scale)
         self._episode: CandidateEpisode | None = None
         self._observed_values: list[list[float | None]] = []
         self._query_mask: list[list[bool]] = []
@@ -154,7 +156,7 @@ class EvidenceAcquisitionEnv:
         self._selected_gene = episode.candidate_genes[action.gene_index]
         return StepResult(
             state=self.state,
-            reward=-selected_dependency,
+            reward=-selected_dependency * self.selection_reward_scale,
             done=True,
             info={
                 "action_type": ActionType.SELECT.value,

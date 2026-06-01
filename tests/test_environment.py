@@ -77,6 +77,15 @@ def test_select_action_terminates_with_dependency_reward() -> None:
     assert env.available_actions() == ()
 
 
+def test_select_action_scales_dependency_reward() -> None:
+    env = EvidenceAcquisitionEnv(_modalities(), selection_reward_scale=1.5)
+    env.reset(_episode())
+
+    result = env.step(env.select_action(gene_index=0))
+
+    assert result.reward == pytest.approx(1.875)
+
+
 def test_repeated_query_does_not_change_state_and_gets_penalty() -> None:
     env = EvidenceAcquisitionEnv(_modalities(), repeated_query_penalty=3.0)
     env.reset(_episode())

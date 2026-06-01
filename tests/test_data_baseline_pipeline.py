@@ -137,8 +137,9 @@ def test_baseline_config_loads_environment_costs() -> None:
     assert config.environment.use_supervised_modality_scores
     assert config.environment.query_costs == {
         "expression": 0.02,
-        "cna": 0.03,
-        "damaging_mutation": 0.04,
-        "hotspot_mutation": 0.04,
+        "cna": 0.02,
+        "damaging_mutation": 0.02,
+        "hotspot_mutation": 0.02,
     }
     assert config.environment.repeated_query_penalty == 0.0
+    assert config.environment.selection_reward_scale == 1.5

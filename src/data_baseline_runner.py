@@ -9,6 +9,7 @@ from src.data_baselines import evaluate_policy
 from src.config import BaselineConfig, load_baseline_config
 from src.data import load_project_data
 from src.episodes import EpisodeBuilder
+from src.splits import load_cell_line_split_config, maybe_split_dependency_by_cell_line
 from src.tracking import log_baseline_results, wandb_baseline_run
 
 
@@ -29,7 +30,13 @@ def run_data_baseline_pipeline(
         modality_paths=modality_paths,
         metadata_path=metadata_path,
     )
-    episodes = _build_episodes(config, data.dependency)
+    split_config = load_cell_line_split_config(config_path)
+    _, _, eval_dependency = maybe_split_dependency_by_cell_line(
+        config,
+        data.dependency,
+        split_config,
+    )
+    episodes = _build_episodes(config, eval_dependency)
     policies = _build_policies(config, data.modalities)
 
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
