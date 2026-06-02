@@ -55,6 +55,15 @@ BASELINE_COLOR = "#B7A6D6"
 MLP_COLOR = "#C8C1D9"
 SELECT_COLOR = "#3B2E58"
 DQN_EDGE_WIDTH = 2.5
+# Match poster_outputs/reward_graph.png at dpi=180: 5056 x 2656 px.
+POSTER_BAR_FIGSIZE = (5056 / 180, 2656 / 180)
+POSTER_BAR_DPI = 180
+POSTER_TITLE_SIZE = 42
+POSTER_SUPTITLE_SIZE = 46
+POSTER_LABEL_SIZE = 34
+POSTER_TICK_SIZE = 30
+POSTER_ANNOTATION_SIZE = 28
+POSTER_LEGEND_SIZE = 28
 
 ABLATION_VARIANT_ORDER = (
     "scale1_long_mlp_1step",
@@ -541,12 +550,12 @@ def _plot_context_sweep_reward_and_modality(
         for column in modality_columns
     ]
 
-    fig_height = max(6.4, len(frame) * 0.62 + 1.8)
     fig, (ax_reward, ax_mod) = plt.subplots(
         1,
         2,
-        figsize=(13.5, fig_height),
-        gridspec_kw={"width_ratios": [1.0, 1.35], "wspace": 0.42},
+        figsize=POSTER_BAR_FIGSIZE,
+        dpi=POSTER_BAR_DPI,
+        gridspec_kw={"width_ratios": [1.0, 1.35], "wspace": 0.62},
     )
 
     rewards = frame["total_reward"].astype(float)
@@ -564,35 +573,40 @@ def _plot_context_sweep_reward_and_modality(
             f"{float(reward):.3f}",
             va="center",
             ha="left",
-            fontsize=8,
+            fontsize=POSTER_ANNOTATION_SIZE,
         )
     ax_reward.set_yticks(y_positions)
     ax_reward.set_yticklabels(labels)
     ax_reward.invert_yaxis()
     ax_reward.set_xlabel("Eval total reward")
-    ax_reward.set_title("Where should cancer context enter?")
-    ax_reward.legend(loc="lower right", fontsize=8)
+    ax_reward.set_title("Where should cancer context enter?", fontsize=POSTER_TITLE_SIZE, pad=18)
+    ax_reward.tick_params(axis="both", labelsize=POSTER_TICK_SIZE)
+    ax_reward.xaxis.label.set_size(POSTER_LABEL_SIZE)
+    ax_reward.legend(loc="lower right", fontsize=POSTER_LEGEND_SIZE)
     ax_reward.grid(axis="x", alpha=0.25)
 
     left = [0.0] * len(frame)
     for column, label, color in zip(modality_columns, modality_labels, colors, strict=True):
         values = frame[column].astype(float).tolist()
-        ax_mod.barh(y_positions, values, left=left, height=0.65, label=label, color=color, edgecolor="white")
+        ax_mod.barh(y_positions, values, left=left, height=0.75, label=label, color=color, edgecolor="white")
         left = [previous + current for previous, current in zip(left, values, strict=True)]
 
     ax_mod.set_yticks(y_positions)
     ax_mod.set_yticklabels(labels)
     ax_mod.invert_yaxis()
     ax_mod.set_xlabel("Mean queries per episode")
-    ax_mod.set_title("Acquisition behavior")
-    ax_mod.legend(loc="lower right", fontsize=7, ncol=2)
+    ax_mod.set_title("Acquisition behavior", fontsize=POSTER_TITLE_SIZE, pad=18)
+    ax_mod.tick_params(axis="both", labelsize=POSTER_TICK_SIZE)
+    ax_mod.xaxis.label.set_size(POSTER_LABEL_SIZE)
+    ax_mod.legend(loc="lower right", fontsize=POSTER_LEGEND_SIZE, ncol=2)
     ax_mod.grid(axis="x", alpha=0.25)
 
     fig.suptitle(
         "Cancer-context ablations: context throughout vs SELECT-only",
-        fontsize=12,
-        y=1.01,
+        fontsize=POSTER_SUPTITLE_SIZE,
+        y=0.97,
     )
+    fig.subplots_adjust(left=0.18, right=0.97, top=0.88, bottom=0.14, wspace=0.62)
     fig.tight_layout()
     return _save(fig, output_dir / "context_sweep_reward_and_modality.png")
 
@@ -808,8 +822,7 @@ def _plot_total_reward(results: pd.DataFrame, output_dir: Path) -> Path:
     plt = _pyplot()
     frame = results.iloc[::-1].reset_index(drop=True)
 
-    fig_height = max(5.5, len(frame) * 0.55)
-    fig, ax = plt.subplots(figsize=(10, fig_height))
+    fig, ax = plt.subplots(figsize=POSTER_BAR_FIGSIZE, dpi=POSTER_BAR_DPI)
     labels = [_short_policy_name(policy, max_width=14) for policy in frame["policy"]]
     colors = [DQN_COLOR if policy in POSTER_DQN_POLICIES else BASELINE_COLOR for policy in frame["policy"]]
     edge_widths = [DQN_EDGE_WIDTH if policy in POSTER_DQN_POLICIES else 0.8 for policy in frame["policy"]]
@@ -826,7 +839,7 @@ def _plot_total_reward(results: pd.DataFrame, output_dir: Path) -> Path:
             f"{x:.3f}",
             va="center",
             ha="left" if x >= 0 else "right",
-            fontsize=8,
+            fontsize=POSTER_ANNOTATION_SIZE,
             color="#111111",
         )
     for index, policy in enumerate(frame["policy"]):
@@ -835,7 +848,9 @@ def _plot_total_reward(results: pd.DataFrame, output_dir: Path) -> Path:
             ax.get_yticklabels()[index].set_color(DQN_COLOR)
     ax.axvline(0.0, color="black", linewidth=1)
     ax.set_xlabel("Total episode reward (target quality − query cost)")
-    ax.set_title("Total Reward After Query Costs")
+    ax.set_title("Total Reward After Query Costs", fontsize=POSTER_TITLE_SIZE, pad=18)
+    ax.tick_params(axis="both", labelsize=POSTER_TICK_SIZE)
+    ax.xaxis.label.set_size(POSTER_LABEL_SIZE)
     ax.grid(axis="x", alpha=0.25)
     return _save(fig, output_dir / "environment_total_reward.png")
 
@@ -975,8 +990,7 @@ def _plot_ranking_metrics(results: pd.DataFrame, output_dir: Path) -> Path:
     x_positions = list(range(len(frame)))
     width = 0.24
 
-    fig_width = max(10.0, len(frame) * 1.1)
-    fig, ax = plt.subplots(figsize=(fig_width, 7.0))
+    fig, ax = plt.subplots(figsize=POSTER_BAR_FIGSIZE, dpi=POSTER_BAR_DPI)
     for offset, metric in enumerate(METRIC_COLUMNS):
         xs = [x + (offset - 1) * width for x in x_positions]
         bar_colors = []
@@ -1002,20 +1016,22 @@ def _plot_ranking_metrics(results: pd.DataFrame, output_dir: Path) -> Path:
                 f"{height:.3f}",
                 ha="center",
                 va="bottom",
-                fontsize=6,
+                fontsize=POSTER_ANNOTATION_SIZE,
                 color="#111111",
             )
 
     ax.set_xticks(x_positions)
-    tick_labels = ax.set_xticklabels(policies, rotation=35, ha="right", fontsize=8)
+    tick_labels = ax.set_xticklabels(policies, rotation=35, ha="right", fontsize=POSTER_TICK_SIZE)
     for index, policy in enumerate(frame["policy"]):
         if policy in POSTER_DQN_POLICIES:
             tick_labels[index].set_fontweight("bold")
             tick_labels[index].set_color(DQN_COLOR)
     ax.set_ylim(0.0, 1.12)
     ax.set_ylabel("Metric value")
-    ax.set_title("Ranking Metrics")
-    ax.legend(loc="upper left")
+    ax.set_title("Ranking Metrics", fontsize=POSTER_TITLE_SIZE, pad=18)
+    ax.tick_params(axis="y", labelsize=POSTER_TICK_SIZE)
+    ax.yaxis.label.set_size(POSTER_LABEL_SIZE)
+    ax.legend(loc="upper left", fontsize=POSTER_LEGEND_SIZE)
     ax.grid(axis="y", alpha=0.25)
     return _save(fig, output_dir / "baseline_ranking_metrics.png")
 
@@ -1091,19 +1107,23 @@ def _plot_regret_vs_queries(episodes: pd.DataFrame, output_dir: Path) -> Path:
 
 def _plot_query_efficiency(query_efficiency: pd.DataFrame, output_dir: Path) -> Path:
     plt = _pyplot()
-    fig, ax = plt.subplots(figsize=(10, 5.5))
+    fig, ax = plt.subplots(figsize=POSTER_BAR_FIGSIZE, dpi=POSTER_BAR_DPI)
     ax.bar(
         query_efficiency["gene_true_rank"].astype(str),
         query_efficiency["query_fraction"],
         color=DQN_COLOR,
         edgecolor="black",
-        linewidth=0.8,
+        linewidth=1.8,
     )
-    ax.axhline(1.0 / max(len(query_efficiency), 1), color="black", linestyle="--", linewidth=1)
+    ax.axhline(1.0 / max(len(query_efficiency), 1), color="#3B2E58", linestyle="--", linewidth=2.4)
     ax.set_xlabel("True dependency rank of queried gene")
     ax.set_ylabel("Fraction of DQN query actions")
-    ax.set_title("DQN Query Efficiency by True Dependency Rank")
+    ax.set_title("DQN Query Efficiency by True Dependency Rank", fontsize=POSTER_TITLE_SIZE, pad=18)
+    ax.tick_params(axis="both", labelsize=POSTER_TICK_SIZE)
+    ax.xaxis.label.set_size(POSTER_LABEL_SIZE)
+    ax.yaxis.label.set_size(POSTER_LABEL_SIZE)
     ax.grid(axis="y", alpha=0.25)
+    fig.subplots_adjust(left=0.14, right=0.97, top=0.88, bottom=0.16)
     return _save(fig, output_dir / "dqn_query_efficiency_by_true_rank.png")
 
 

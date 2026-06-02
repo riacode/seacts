@@ -27,7 +27,6 @@ def main() -> None:
     args = parser.parse_args()
 
     scripts = (
-        ROOT / "scripts" / "generate_poster_architecture_diagram.py",
         ROOT / "scripts" / "generate_poster_outputs.py",
         ROOT / "scripts" / "generate_poster_context_section.py",
     )
