@@ -22,7 +22,7 @@ We model cancer target selection as a finite-horizon decision process constructe
 
 The agent can take two types of actions: querying a modality for a specific gene, or terminating and selecting a gene as the final target. Query actions reveal the corresponding modality-specific information deterministically from the dataset, simulating the process of acquiring biological evidence. The episode ends when the agent selects a gene, at which point it receives a reward based on a transformed dependency score of the chosen gene, where higher reward corresponds to stronger cancer dependency, with an additional penalty for the number of queries made. This creates a delayed reward setting in which the agent must balance gathering more information against the cost of doing so.
 
-We train Deep Q-Network (DQN) policies over this discrete action space. The baseline DQN takes a vectorized representation of the partially observed state and outputs scores for each possible action; our main ablation also evaluates structured candidate-aware and structured dueling Q-networks. Training uses Double DQN updates, experience replay, target networks, action masking, and validation checkpointing. We evaluate against raw modality-ranking baselines, oracle/random upper and lower bounds, and fixed sequential policies that query a modality and rank candidates from the revealed scores. We report selected dependency, Hit@k, NDCG@k, MRR@k, query cost, number of queries, and total reward. We additionally analyze learned policies through per-episode behavior summaries, per-step action logs, modality-usage plots, cancer-context modality-usage heatmaps, query-efficiency plots, regret-vs-query plots, and example evidence-acquisition trajectories.
+We train Deep Q-Network (DQN) policies over this discrete action space. The baseline DQN takes a vectorized representation of the partially observed state and outputs scores for each possible action; our main ablations evaluate structured candidate-aware, structured dueling, N-step, and cancer-context DQN variants. The best Context DQN warm-starts from the tuned Structured DQN query policy and injects OncoTree lineage only into final target-selection scoring. Training uses Double DQN updates, experience replay, target networks, action masking, and validation checkpointing. We evaluate against raw modality-ranking baselines, oracle/random upper and lower bounds, and fixed sequential policies that query a modality and rank candidates from the revealed scores. We report selected dependency, Hit@k, NDCG@k, MRR@k, query cost, number of queries, and total reward. We additionally analyze learned policies through per-episode behavior summaries, per-step action logs, modality-usage plots, cancer-context modality-usage heatmaps, query-efficiency plots, regret-vs-query plots, and example evidence-acquisition trajectories.
 
 ## Contributions
 
@@ -60,6 +60,11 @@ evidence acquisition for cancer target selection:
 12. A DQN ablation entrypoint compares the flat MLP Q-network against N-step,
     structured candidate-encoder, and structured dueling DQN variants under the
     same reward, query-cost, and minimum-evidence settings.
+13. Context DQN sweep entrypoints test where cancer lineage should enter the
+    policy, including context throughout the network, lineage-specific evidence
+    scores, context fusion, and SELECT-only lineage-aware target scoring.
+14. Poster-generation scripts assemble the final quantitative and qualitative
+    figures used for result communication.
 
 ## Results
 
@@ -98,19 +103,22 @@ candidate-modality pairs to query before selecting a final target.
 | Policy | Total reward | Selected dependency | Queries | Hit@k | NDCG@k | MRR@k |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Oracle select | 1.423 | -1.423 | 0.0 | 1.000 | 1.000 | 1.000 |
-| Structured DQN, 1-step larger | **1.035** | -1.287 | 12.6 | **1.000** | 0.847 | 0.807 |
+| SELECT-only Context DQN | **1.043** | -1.290 | 12.4 | **1.000** | 0.843 | 0.804 |
+| Structured DQN, 1-step larger | 1.035 | -1.287 | 12.6 | **1.000** | 0.847 | 0.807 |
 | Query CNA full | 1.011 | -1.331 | 16.0 | 0.998 | 0.919 | 0.841 |
 | Query expression full | 1.005 | -1.325 | 16.0 | 0.998 | 0.921 | 0.842 |
 | Query CNA budget 12 | 0.927 | -1.167 | 12.0 | 0.975 | 0.760 | 0.648 |
 | Random select | 0.164 | -0.164 | 0.0 | 0.483 | 0.221 | 0.104 |
 
-The learned policy slightly outperforms full CNA and full expression baselines
-on cost-adjusted reward while using about 21% fewer queries. The full-query
-baselines still select slightly stronger raw dependencies, but the policy
-achieves a better quality-cost tradeoff by stopping before exhaustive evidence
-collection. This larger structured 1-step model is the best sweep variant; it
-uses a 256-dimensional hidden layer instead of the 128-dimensional hidden layer
-used by the default structured 1-step ablation model.
+The learned DQN policies slightly outperform full CNA and full expression
+baselines on cost-adjusted reward while using fewer queries. The full-query
+baselines still select slightly stronger raw dependencies, but the DQN policies
+achieve a better quality-cost tradeoff by stopping before exhaustive evidence
+collection. The tuned Structured DQN uses a 256-dimensional hidden layer instead
+of the 128-dimensional hidden layer used by the default structured 1-step
+ablation model. The best Context DQN keeps this strong query protocol mostly
+unchanged and adds cancer lineage only to final target-selection scoring,
+improving total reward from 1.035 to 1.043.
 
 ### DQN Ablation
 
@@ -128,11 +136,38 @@ of improvement. The MLP DQN flattens the state and outputs one Q-value per
 action. The structured DQN instead encodes each candidate gene with its observed
 values and query mask, pools candidate encodings into an episode context, and
 uses separate query/select heads. This explicitly shares information across
-actions for the same gene and across repeated modality types. 3-step returns
-alone hurt the MLP, likely because they add target variance without enough
-action structure. Dueling helps most in the 3-step structured setting, where
-the value stream can stabilize partially observed state estimates, but it does
-not beat the simpler structured 1-step model on total reward.
+actions for the same gene and across repeated modality types. A key bottleneck
+is therefore action representation rather than DQN alone: sharing parameters
+across repeated gene-modality decisions makes the Q-function easier to learn.
+3-step returns add target variance; dueling partially stabilizes the noisier
+3-step structured model, but the simpler 1-step structured model remains
+strongest among the non-context ablations.
+
+### Context DQN Sweep
+
+Context DQN variants test where cancer lineage should enter the policy: as a
+network input during acquisition, as lineage-specific evidence scores, through
+context-fusion heads, or only when scoring final SELECT actions. The best model
+is the SELECT-only context variant, which leaves the tuned Structured DQN query
+protocol unchanged and uses OncoTree lineage only to score final gene
+selections.
+
+| Context variant | Total reward | Selected dependency | Queries | Hit@k | NDCG@k | MRR@k |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SELECT-only context, frozen query path | **1.043** | -1.290 | 12.37 | 1.000 | 0.843 | 0.804 |
+| Context from start + structured init | 1.025 | -1.273 | 12.37 | 1.000 | 0.831 | 0.775 |
+| Context from start, 32-dim | 1.023 | -1.267 | 12.23 | 1.000 | 0.820 | 0.760 |
+| Context from start, 64-dim | 1.015 | -1.258 | 12.18 | 1.000 | 0.821 | 0.772 |
+| Lineage-specific evidence scores + init | 1.010 | -1.243 | 11.66 | 0.998 | 0.809 | 0.743 |
+| Fusion lineage context + init | 0.932 | -1.256 | 16.21 | 1.000 | 0.821 | 0.765 |
+
+The context sweep suggests that cancer lineage is most useful after evidence
+collection, when choosing among plausible targets. Variants that expose lineage
+throughout acquisition often shift modality usage toward CNA or mutation
+queries, but they underperform the robust expression-heavy query protocol
+learned by the Structured DQN. The final Context DQN remains mostly
+expression-driven, so its improvement is attributable to lineage-aware final
+selection rather than a new query protocol.
 
 
 ## Setup
@@ -218,6 +253,12 @@ modal run modal_sweep_context_dqn.py
 
 Results are written to `depmap_baselines/dqn_context_sweeps/` on the `seacts-results` volume.
 
+Run a single Context DQN sweep variant:
+
+```bash
+modal run modal_sweep_context_dqn.py --variant ctx_select_only_init_frozen
+```
+
 Run the DQN architecture/algorithm ablation:
 
 ```bash
@@ -228,6 +269,15 @@ Plot the saved comparison and ablation results and log the figures to W&B:
 
 ```bash
 modal run modal_visualizations.py
+```
+
+Pull and regenerate local poster result figures from the Modal results volume:
+
+```bash
+scripts/pull_modal_results.sh
+python scripts/generate_poster_outputs.py
+python scripts/generate_poster_context_section.py
+python scripts/regenerate_poster.py
 ```
 
 The downloader fetches the DepMap manifest fresh from `https://depmap.org/portal/api/download/files`, selects the latest `DepMap Public` release by default, and downloads the dependency matrix, metadata, gene-aligned evidence matrices, and context files needed for the project:
@@ -252,6 +302,7 @@ The code follows the course assignment style, with implementation code grouped u
 src/
 ├── behavior_analysis.py     # DQN behavior CSV summaries and context joins
 ├── config.py                # YAML config loading
+├── context_encoding.py      # Cell-line to cancer-lineage context encoder
 ├── data.py                  # DepMap-style matrix loading
 ├── data_baseline_runner.py  # Direct data baseline runner
 ├── data_baselines.py        # Direct data baseline policies
@@ -262,6 +313,7 @@ src/
 ├── environment_runner.py    # RL environment baseline runner
 ├── episodes.py              # Candidate episode construction
 ├── metrics.py               # Ranking and selection metrics
+├── modality_scores.py       # Supervised and lineage-specific evidence scores
 ├── replay_buffer.py         # Experience replay storage
 ├── rl_runner.py             # DQN training/evaluation runner
 ├── tracking.py              # W&B logging helpers
@@ -270,12 +322,18 @@ src/
 
 scripts/
 ├── analyze_dqn_behavior.py
+├── generate_poster_context_section.py
+├── generate_poster_outputs.py
 ├── plot_baseline_results.py
+├── poster_figures.py
+├── pull_modal_results.sh
+├── regenerate_poster.py
 ├── run_data_baselines.py
 ├── run_environment_baselines.py
 └── train_dqn.py
 
 modal_ablate_dqn.py            # Modal DQN architecture/algorithm ablation runner
+modal_cancer_context_dqn.py    # Modal cancer-context DQN runner
 modal_data.py                  # DepMap download/prep launcher
 modal_data_baselines.py        # Modal data-baseline runner
 modal_environment_baselines.py # Modal environment-baseline runner
@@ -325,6 +383,7 @@ Metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal 
 - `rl_env_oracle_select`: selects by hidden dependency as an upper bound.
 - `rl_env_query_{modality}_then_select`: queries one modality for every candidate, then selects by the revealed evidence scores.
 - `rl_env_query_expression_budget_{k}_then_select`: queries expression for a fixed budget of candidates, then selects by the revealed evidence scores.
+- `rl_env_query_cna_budget_{k}_then_select`: queries CNA for a fixed budget of candidates, then selects by the revealed evidence scores.
 - `rl_env_query_all_average_then_select`: queries all modalities for every candidate, then selects by the standardized average of revealed evidence scores.
 
 Environment metrics include selected dependency score, hit rate at k, NDCG at k, reciprocal rank at k, query cost, number of queries, and total episode reward.
@@ -373,6 +432,10 @@ trajectory strip plots, and cancer-context modality-usage heatmaps when
 metadata includes a lineage-like column. Compact success and failure case
 tables are logged for drill-down examples.
 
+For Context DQN behavior, pass a context sweep variant such as
+`ctx_select_only_init_frozen` to `modal_log_dqn_behavior.py`; outputs are written
+under `depmap_baselines/dqn_context_sweeps/<variant>/`.
+
 The same summaries can be generated locally from saved CSVs:
 
 ```bash
@@ -386,11 +449,15 @@ python scripts/analyze_dqn_behavior.py \
 
 - Bernardino, G., Jonsson, A., Loncaric, F., Castellote, P.-M. M., Sitges, M., Clarysse, P., & Duchateau, N. (2022). Reinforcement learning for active modality selection during diagnosis. *Medical Image Computing and Computer Assisted Intervention - MICCAI 2022*, 592-601.
 - Broad Institute. (n.d.). *DepMap Portal*. Retrieved May 19, 2026, from https://depmap.org/portal/
+- Hoerl, A. E., & Kennard, R. W. (1970). Ridge regression: Biased estimation for nonorthogonal problems. *Technometrics, 12*(1), 55-67. https://doi.org/10.1080/00401706.1970.10488634
 - Huang, H.-T., Dinh, D., & Oliva, J. B. (2026). *Information templates: A new paradigm for intelligent active feature acquisition*. arXiv. https://arxiv.org/abs/2508.18380
 - Janisch, J., Pevný, T., & Lisý, V. (2018). *Classification with costly features using deep reinforcement learning*. arXiv. https://arxiv.org/abs/1711.07364
+- Kundra, R., Zhang, H., Sheridan, R., Sirintrapun, S. J., Wang, A., Ochoa, A., Wilson, M., Gross, B., Sun, Y., Chen, H., et al. (2021). OncoTree: A cancer classification system for precision oncology. *JCO Clinical Cancer Informatics, 5*, 221-230. https://doi.org/10.1200/CCI.20.00108
 - Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A. A., Veness, J., Bellemare, M. G., Graves, A., Riedmiller, M., Fidjeland, A. K., Ostrovski, G., et al. (2015). Human-level control through deep reinforcement learning. *Nature, 518*(7540), 529-533. https://doi.org/10.1038/nature14236
 - Pacini, C., Dempster, J. M., Boyle, I., Goncalves, E., Najgebauer, H., et al. (2024). A comprehensive clinically informed map of dependencies in cancer cells and framework for target prioritization. *Cancer Cell, 42*, 301-316. https://doi.org/10.1016/j.ccell.2023.12.016
 - Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G., & Dean, J. (2017). Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. *International Conference on Learning Representations*. https://arxiv.org/abs/1701.06538
 - Shi, X., Gekas, C., Verduzco, D., Petiwala, S., Jeffries, C., Lu, C., Murphy, E., Anton, T., Vo, A. H., Xiao, Z., et al. (2024). Building a translational cancer dependency map for The Cancer Genome Atlas. *Nature Cancer, 5*, 1176-1194. https://doi.org/10.1038/s43018-024-00789-y
 - Sun, D., Gao, W., Hu, H., & Zhou, S. (2022). Why 90% of clinical drug development fails and how to improve it? *Acta Pharmaceutica Sinica B, 12*(7), 3049-3062. https://doi.org/10.1016/j.apsb.2022.02.002
 - Tsherniak, A., Vazquez, F., Montgomery, P. G., Weir, B. A., Kryukov, G., Cowley, G. S., Gill, S., Harrington, W. F., Pantel, S., Krill-Burger, J., et al. (2017). Defining a cancer dependency map. *Cell, 170*(3), 564-576. https://doi.org/10.1016/j.cell.2017.06.010
+- van Hasselt, H., Guez, A., & Silver, D. (2016). Deep reinforcement learning with Double Q-learning. *AAAI, 30*(1). https://doi.org/10.1609/aaai.v30i1.10295
+- Wang, Z., Schaul, T., Hessel, M., van Hasselt, H., Lanctot, M., & de Freitas, N. (2016). Dueling network architectures for deep reinforcement learning. *International Conference on Machine Learning*, 1995-2003.
