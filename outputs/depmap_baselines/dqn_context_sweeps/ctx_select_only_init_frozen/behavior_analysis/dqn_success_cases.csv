@@ -1,0 +1,21 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+0,ACH-000417,ERCC3,-0.9712048192702762,0.0,1.0,8,0.16,0.8112048192702762,0,0,8,0,Pancreas,Pancreatic Adenocarcinoma,Pancreatic Adenocarcinoma
+1,ACH-000552,KIF18A,-3.3760423938541426,0.0,1.0,8,0.16,3.2160423938541425,0,0,8,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+2,ACH-000172,CHD4,-1.2336927489255478,0.0,1.0,8,0.16,1.073692748925548,0,0,8,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+3,ACH-000422,MYC,-2.084482650782212,0.0,1.0,8,0.16,1.924482650782212,0,0,8,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+5,ACH-000444,DHPS,-1.284714993462327,0.0,1.0,8,0.16,1.124714993462327,0,0,8,0,Lung,Non-Small Cell Lung Cancer,Giant Cell Carcinoma of the Lung
+8,ACH-001205,TRAPPC8,-1.3488439380027129,0.0,1.0,8,0.16,1.188843938002713,0,0,8,0,Bone,Ewing Sarcoma,Ewing Sarcoma
+12,ACH-000959,KIF18A,-1.699575166073721,0.0,1.0,8,0.16,1.5395751660737211,0,0,8,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+13,ACH-000390,EIF1AX,-2.3364030014521693,0.0,1.0,8,0.16,2.176403001452169,0,0,8,0,Lung,Non-Small Cell Lung Cancer,Lung Squamous Cell Carcinoma
+14,ACH-000915,NCAPD2,-0.9890518222404616,0.0,1.0,8,0.16,0.8290518222404616,0,0,8,0,Skin,Melanoma,Cutaneous Melanoma
+17,ACH-000323,EIF1AX,-2.2139732514964847,0.0,1.0,8,0.16,2.053973251496485,0,0,8,0,CNS/Brain,Adult-Type Diffuse Glioma,"Glioblastoma, IDH-Wildtype"
+18,ACH-000172,CCND1,-0.9123303606210482,0.0,1.0,8,0.16,0.7523303606210482,0,0,8,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+22,ACH-000191,PPP2R1A,-1.459626209444615,0.0,1.0,8,0.16,1.2996262094446152,0,0,8,0,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+25,ACH-000371,SON,-1.2570513243849812,0.0,1.0,8,0.16,1.097051324384981,0,0,8,0,Lymphoid,Mature B-Cell Neoplasms,"Diffuse Large B-Cell Lymphoma, NOS"
+26,ACH-002705,RFC5,-1.4207611324289109,0.0,1.0,8,0.16,1.260761132428911,0,0,8,0,Esophagus/Stomach,Esophagogastric Adenocarcinoma,Esophageal Adenocarcinoma
+27,ACH-000030,H3-3A,-1.8741200531751503,0.0,1.0,8,0.16,1.7141200531751504,0,0,8,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+29,ACH-000697,RFC5,-1.7025395259713765,0.0,1.0,8,0.16,1.5425395259713766,0,0,8,0,Lymphoid,Mature B-Cell Neoplasms,"Diffuse Large B-Cell Lymphoma, NOS"
+33,ACH-000381,TRAPPC8,-0.9244750217013552,0.0,1.0,8,0.16,0.7644750217013552,0,0,8,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+36,ACH-000144,PCBP1,-1.8443416735635787,0.0,1.0,8,0.16,1.6843416735635788,0,0,8,0,Esophagus/Stomach,Esophagogastric Adenocarcinoma,Stomach Adenocarcinoma
+38,ACH-001054,CNOT3,-1.3129996021506063,0.0,1.0,8,0.16,1.1529996021506064,0,0,8,0,CNS/Brain,Embryonal Tumor,"Medulloblastoma, Group 3"
+40,ACH-000381,CTCF,-2.018059979473116,0.0,1.0,8,0.16,1.858059979473116,0,0,8,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma

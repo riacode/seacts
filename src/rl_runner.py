@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from random import Random
 from statistics import mean
@@ -15,18 +15,27 @@ import yaml
 from src.config import BaselineConfig, load_baseline_config
 from src.data import load_project_data
 from src.data_baseline_runner import _resolve_data_path, _resolve_optional_data_path
+from src.context_encoding import LineageContextEncoder
 from src.dqn import (
+    ContextStructuredQNetwork,
     DQNHyperparameters,
+    _context_tensor,
     build_q_network,
     epsilon_by_step,
+    forward_q_network,
+    load_structured_checkpoint_into_context,
     optimize_dqn_batch,
     select_epsilon_greedy_action,
     select_greedy_action,
+    uses_cancer_context,
 )
 from src.environment import ActionType, EvidenceAcquisitionEnv
 from src.episodes import CandidateEpisode, EpisodeBuilder
 from src.metrics import hit_at_k, ndcg_at_k, reciprocal_rank_at_k
-from src.modality_scores import build_supervised_modality_scores
+from src.modality_scores import (
+    build_lineage_supervised_modality_scores,
+    build_supervised_modality_scores,
+)
 from src.replay_buffer import ReplayBuffer, Transition
 from src.splits import CellLineSplitConfig, maybe_split_dependency_by_cell_line
 from src.state_encoder import StateEncoder
@@ -60,6 +69,16 @@ class RLTrainingConfig:
     min_queries_before_select: int = 0
     n_step_returns: int = 1
     q_network_type: str = "mlp"
+    cancer_context_column: str = "OncotreeLineage"
+    cancer_context_dim: int = 16
+    init_structured_checkpoint: str | None = None
+    freeze_shared_heads: bool = False
+    use_lineage_modality_scores: bool = False
+    lineage_min_samples: int = 6
+    query_shaping_alpha: float = 0.0
+    fusion_query_boost: float = 2.0
+    fusion_select_weight: float = 1.0
+    select_residual_weight: float = 0.25
     wandb_log_interval: int = 25
     split_cell_lines: bool = False
     validation_cell_line_fraction: float = 0.1
@@ -93,6 +112,13 @@ class RLTrainingConfig:
             q_network_type=self.q_network_type,
             n_genes=0,
             n_modalities=0,
+            n_lineages=0,
+            cancer_context_dim=self.cancer_context_dim,
+            init_structured_checkpoint=self.init_structured_checkpoint,
+            freeze_shared_heads=self.freeze_shared_heads,
+            fusion_query_boost=self.fusion_query_boost,
+            fusion_select_weight=self.fusion_select_weight,
+            select_residual_weight=self.select_residual_weight,
         )
 
 
@@ -118,10 +144,12 @@ def run_dqn_training_pipeline(
 ) -> tuple[pd.DataFrame, Path]:
     config = load_baseline_config(config_path)
     rl_config = load_rl_training_config(config_path)
-    train_episodes, eval_episodes, validation_episodes, env, encoder = _prepare_dqn_setup(
-        config,
-        raw_data_dir,
-        rl_config,
+    train_episodes, eval_episodes, validation_episodes, env, encoder, context_encoder = (
+        _prepare_dqn_setup(
+            config,
+            raw_data_dir,
+            rl_config,
+        )
     )
 
     resolved_output_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
@@ -136,11 +164,17 @@ def run_dqn_training_pipeline(
             env=env,
             episodes=train_episodes,
             encoder=encoder,
-            hyperparameters=rl_config.hyperparameters,
+            hyperparameters=_hyperparameters_with_context(
+                rl_config.hyperparameters,
+                encoder,
+                context_encoder,
+            ),
             seed=config.seed,
             validation_episodes=validation_episodes,
             top_k=config.evaluation.top_k,
+            context_encoder=context_encoder,
             training_log_callback=_wandb_training_logger(wandb_run, rl_config),
+            query_shaping_alpha=rl_config.query_shaping_alpha,
         )
 
         torch = _torch()
@@ -155,6 +189,7 @@ def run_dqn_training_pipeline(
             top_k=config.evaluation.top_k,
             max_steps_per_episode=rl_config.max_steps_per_episode,
             min_queries_before_select=rl_config.min_queries_before_select,
+            context_encoder=context_encoder,
         )
         results.to_csv(output_path, index=False)
         collect_dqn_trajectory_metrics(
@@ -164,6 +199,7 @@ def run_dqn_training_pipeline(
             encoder=encoder,
             max_steps_per_episode=rl_config.max_steps_per_episode,
             min_queries_before_select=rl_config.min_queries_before_select,
+            context_encoder=context_encoder,
         ).to_csv(trajectory_path, index=False)
         _log_dqn_final_to_wandb(wandb_run, results, training_history, model_path)
     return results, output_path
@@ -204,6 +240,16 @@ def load_rl_training_config(config_path: str | Path) -> RLTrainingConfig:
         min_queries_before_select=int(training.get("min_queries_before_select", 0)),
         n_step_returns=int(training.get("n_step_returns", 1)),
         q_network_type=str(training.get("q_network_type", "mlp")),
+        cancer_context_column=str(training.get("cancer_context_column", "OncotreeLineage")),
+        cancer_context_dim=int(training.get("cancer_context_dim", 16)),
+        init_structured_checkpoint=training.get("init_structured_checkpoint"),
+        freeze_shared_heads=bool(training.get("freeze_shared_heads", False)),
+        use_lineage_modality_scores=bool(training.get("use_lineage_modality_scores", False)),
+        lineage_min_samples=int(training.get("lineage_min_samples", 6)),
+        query_shaping_alpha=float(training.get("query_shaping_alpha", 0.0)),
+        fusion_query_boost=float(training.get("fusion_query_boost", 2.0)),
+        fusion_select_weight=float(training.get("fusion_select_weight", 1.0)),
+        select_residual_weight=float(training.get("select_residual_weight", 0.25)),
         wandb_log_interval=int(training.get("wandb_log_interval", 25)),
         split_cell_lines=bool(training.get("split_cell_lines", False)),
         validation_cell_line_fraction=float(training.get("validation_cell_line_fraction", 0.1)),
@@ -219,29 +265,19 @@ def train_dqn_agent(
     seed: int,
     validation_episodes: list[CandidateEpisode] | None = None,
     top_k: int = 3,
+    context_encoder: LineageContextEncoder | None = None,
     training_log_callback: Callable[[dict[str, float | int]], None] | None = None,
+    query_shaping_alpha: float = 0.0,
 ) -> tuple[Any, list[dict[str, float | int]]]:
     if not episodes:
         raise ValueError("Cannot train DQN on zero episodes.")
 
     torch = _torch()
     torch.manual_seed(seed)
-    q_network = build_q_network(
-        encoder.state_size,
-        encoder.action_space.size,
-        hyperparameters.hidden_dim,
-        network_type=hyperparameters.q_network_type,
-        n_genes=encoder.n_genes,
-        n_modalities=encoder.n_modalities,
-    )
-    target_network = build_q_network(
-        encoder.state_size,
-        encoder.action_space.size,
-        hyperparameters.hidden_dim,
-        network_type=hyperparameters.q_network_type,
-        n_genes=encoder.n_genes,
-        n_modalities=encoder.n_modalities,
-    )
+    q_network = _build_q_network(encoder, hyperparameters)
+    _maybe_init_context_from_structured(q_network, hyperparameters)
+    target_network = _build_q_network(encoder, hyperparameters)
+    _maybe_init_context_from_structured(target_network, hyperparameters)
     target_network.load_state_dict(q_network.state_dict())
     optimizer = torch.optim.Adam(q_network.parameters(), lr=hyperparameters.learning_rate)
     replay = ReplayBuffer(hyperparameters.replay_capacity, seed=seed)
@@ -263,6 +299,7 @@ def train_dqn_agent(
 
     for episode_number, episode in enumerate(episodes):
         state = env.reset(episode)
+        context_index = _episode_context_index(context_encoder, episode)
         total_reward = 0.0
         query_count = 0
         losses: list[float] = []
@@ -288,9 +325,19 @@ def train_dqn_agent(
                 rng,
                 select_action_indices=encoder.action_space.select_indices(),
                 select_exploration_probability=hyperparameters.select_exploration_probability,
+                context_index=context_index,
             )
             action = encoder.action_space.from_index(action_index)
             result = env.step(action)
+            step_reward = float(result.reward)
+            if (
+                action.action_type == ActionType.QUERY
+                and query_shaping_alpha > 0.0
+            ):
+                true_rank = _true_dependency_rank(episode.dependency_scores, action.gene_index)
+                n_genes = len(episode.candidate_genes)
+                rank_fraction = (true_rank - 1) / max(n_genes - 1, 1)
+                step_reward += query_shaping_alpha * (1.0 - rank_fraction)
             next_state_vector = encoder.encode(result.state)
             next_valid_actions = encoder.valid_action_mask(result.state)
             next_valid_actions = _apply_min_query_constraint(
@@ -302,10 +349,11 @@ def train_dqn_agent(
             transition = Transition(
                 state=state_vector,
                 action=action_index,
-                reward=result.reward,
+                reward=step_reward,
                 next_state=next_state_vector,
                 next_valid_actions=next_valid_actions,
                 done=result.done,
+                context_index=context_index,
             )
             _append_n_step_transition(
                 replay,
@@ -315,7 +363,7 @@ def train_dqn_agent(
                 hyperparameters.n_step_returns,
             )
 
-            total_reward += result.reward
+            total_reward += step_reward
             query_count += int(action.action_type == ActionType.QUERY)
             state = result.state
             global_step += 1
@@ -360,6 +408,7 @@ def train_dqn_agent(
                 top_k=top_k,
                 max_steps_per_episode=hyperparameters.max_steps_per_episode,
                 min_queries_before_select=hyperparameters.min_queries_before_select,
+                context_encoder=context_encoder,
             ).iloc[0]
             row.update(
                 {
@@ -389,6 +438,7 @@ def evaluate_dqn_agent(
     top_k: int,
     max_steps_per_episode: int,
     min_queries_before_select: int = 0,
+    context_encoder: LineageContextEncoder | None = None,
 ) -> pd.DataFrame:
     if not episodes:
         raise ValueError("Cannot evaluate DQN on zero episodes.")
@@ -401,6 +451,7 @@ def evaluate_dqn_agent(
             encoder,
             max_steps_per_episode,
             min_queries_before_select=min_queries_before_select,
+            context_encoder=context_encoder,
         )
         for episode in episodes
     ]
@@ -434,9 +485,13 @@ def build_dqn_eval_env(
     config: BaselineConfig,
     raw_data_dir: str | Path | None,
     rl_config: RLTrainingConfig,
-) -> tuple[EvidenceAcquisitionEnv, StateEncoder, list[CandidateEpisode]]:
-    _, eval_episodes, _, env, encoder = _prepare_dqn_setup(config, raw_data_dir, rl_config)
-    return env, encoder, eval_episodes
+) -> tuple[EvidenceAcquisitionEnv, StateEncoder, list[CandidateEpisode], LineageContextEncoder | None]:
+    _, eval_episodes, _, env, encoder, context_encoder = _prepare_dqn_setup(
+        config,
+        raw_data_dir,
+        rl_config,
+    )
+    return env, encoder, eval_episodes, context_encoder
 
 
 def collect_dqn_behavior_log(
@@ -447,6 +502,7 @@ def collect_dqn_behavior_log(
     top_k: int,
     max_steps_per_episode: int,
     min_queries_before_select: int = 0,
+    context_encoder: LineageContextEncoder | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     episode_rows: list[dict[str, float | int | str | bool]] = []
     step_rows: list[dict[str, float | int | str | None]] = []
@@ -459,6 +515,7 @@ def collect_dqn_behavior_log(
             max_steps_per_episode,
             record_steps=True,
             min_queries_before_select=min_queries_before_select,
+            context_encoder=context_encoder,
         )
         episode_rows.append(_greedy_episode_row(episode, rollout, env.modality_names, top_k))
         step_rows.extend(steps)
@@ -472,6 +529,7 @@ def collect_dqn_trajectory_metrics(
     encoder: StateEncoder,
     max_steps_per_episode: int,
     min_queries_before_select: int = 0,
+    context_encoder: LineageContextEncoder | None = None,
 ) -> pd.DataFrame:
     rows = [
         _greedy_episode_row(
@@ -483,6 +541,7 @@ def collect_dqn_trajectory_metrics(
                 encoder,
                 max_steps_per_episode,
                 min_queries_before_select=min_queries_before_select,
+                context_encoder=context_encoder,
             ),
             env.modality_names,
         )
@@ -501,6 +560,7 @@ def _prepare_dqn_setup(
     list[CandidateEpisode],
     EvidenceAcquisitionEnv,
     StateEncoder,
+    LineageContextEncoder | None,
 ]:
     data = _load_training_data(config, raw_data_dir)
     train_dependency = data.dependency
@@ -530,14 +590,12 @@ def _prepare_dqn_setup(
         rl_config.validation_episodes,
         config.seed + 2,
     )
-    modalities = (
-        build_supervised_modality_scores(
-            data.dependency,
-            data.modalities,
-            train_cell_lines={episode.cell_line_id for episode in train_episodes},
-        )
-        if config.environment.use_supervised_modality_scores
-        else data.modalities
+    modalities = _build_training_modalities(
+        config,
+        data,
+        rl_config,
+        raw_data_dir,
+        train_episodes,
     )
     env = EvidenceAcquisitionEnv(
         modalities,
@@ -549,7 +607,8 @@ def _prepare_dqn_setup(
         n_genes=config.episodes.candidates_per_episode,
         n_modalities=len(env.modality_names),
     )
-    return train_episodes, eval_episodes, validation_episodes, env, encoder
+    context_encoder = _load_context_encoder(config, raw_data_dir, rl_config)
+    return train_episodes, eval_episodes, validation_episodes, env, encoder, context_encoder
 
 
 def _greedy_episode_row(
@@ -590,8 +649,10 @@ def _run_greedy_dqn_episode(
     max_steps_per_episode: int,
     record_steps: bool = False,
     min_queries_before_select: int = 0,
+    context_encoder: LineageContextEncoder | None = None,
 ) -> DQNRollout | tuple[DQNRollout, list[dict[str, float | int | str | None]]]:
     state = env.reset(episode)
+    context_index = _episode_context_index(context_encoder, episode)
     total_reward = 0.0
     query_cost = 0.0
     n_queries = 0
@@ -609,7 +670,12 @@ def _run_greedy_dqn_episode(
             encoder,
             min_queries_before_select,
         )
-        action_index = select_greedy_action(q_network, state_vector, valid_actions)
+        action_index = select_greedy_action(
+            q_network,
+            state_vector,
+            valid_actions,
+            context_index=context_index,
+        )
         action = encoder.action_space.from_index(action_index)
         if action.action_type == ActionType.SELECT:
             selection_state = state
@@ -645,7 +711,7 @@ def _run_greedy_dqn_episode(
             break
     else:
         selection_state = env.state
-        selected_index = _force_select(q_network, env, encoder)
+        selected_index = _force_select(q_network, env, encoder, context_index=context_index)
         result = env.step(env.select_action(selected_index))
         total_reward += result.reward
         if record_steps:
@@ -662,7 +728,7 @@ def _run_greedy_dqn_episode(
                 )
             )
 
-    ranked = _rank_select_actions(q_network, selection_state, encoder)
+    ranked = _rank_select_actions(q_network, selection_state, encoder, context_index=context_index)
     selected_dependency = float(episode.dependency_scores[selected_index])
     rollout = DQNRollout(
         ranked_indices=tuple(ranked),
@@ -712,11 +778,17 @@ def _true_dependency_rank(dependency_scores: tuple[float, ...], gene_index: int)
     return order.index(gene_index) + 1
 
 
-def _rank_select_actions(q_network: Any, state: Any, encoder: StateEncoder) -> list[int]:
+def _rank_select_actions(
+    q_network: Any,
+    state: Any,
+    encoder: StateEncoder,
+    context_index: int = 0,
+) -> list[int]:
     torch = _torch()
     with torch.no_grad():
         state_tensor = torch.as_tensor(encoder.encode(state), dtype=torch.float32).unsqueeze(0)
-        q_values = q_network(state_tensor).squeeze(0).detach().cpu().numpy()
+        context_tensor = _context_tensor(context_index, q_network)
+        q_values = forward_q_network(q_network, state_tensor, context_tensor).squeeze(0).detach().cpu().numpy()
     select_indices = encoder.action_space.select_indices()
     return [
         int(index - encoder.n_genes * encoder.n_modalities)
@@ -724,9 +796,19 @@ def _rank_select_actions(q_network: Any, state: Any, encoder: StateEncoder) -> l
     ]
 
 
-def _force_select(q_network: Any, env: EvidenceAcquisitionEnv, encoder: StateEncoder) -> int:
+def _force_select(
+    q_network: Any,
+    env: EvidenceAcquisitionEnv,
+    encoder: StateEncoder,
+    context_index: int = 0,
+) -> int:
     mask = _select_only_mask(encoder)
-    action_index = select_greedy_action(q_network, encoder.encode(env.state), mask)
+    action_index = select_greedy_action(
+        q_network,
+        encoder.encode(env.state),
+        mask,
+        context_index=context_index,
+    )
     return encoder.action_space.from_index(action_index).gene_index
 
 
@@ -776,6 +858,7 @@ def _collapse_n_step(transitions: list[Transition], gamma: float) -> Transition:
         next_valid_actions=last.next_valid_actions,
         done=last.done,
         n_steps=len(transitions),
+        context_index=first.context_index,
     )
 
 
@@ -796,6 +879,7 @@ def _apply_min_query_constraint(
     if not constrained.any():
         return valid_actions
     return constrained
+
 
 
 def seed_replay_with_modality_expert(
@@ -1027,6 +1111,104 @@ def _rank_value(value: float | None) -> float:
     if value is None or pd.isna(value):
         return float("-inf")
     return float(value)
+
+
+def _build_training_modalities(
+    config: BaselineConfig,
+    data: Any,
+    rl_config: RLTrainingConfig,
+    raw_data_dir: str | Path | None,
+    train_episodes: list[CandidateEpisode],
+) -> dict[str, pd.DataFrame]:
+    if not config.environment.use_supervised_modality_scores:
+        return data.modalities
+    train_cell_lines = {episode.cell_line_id for episode in train_episodes}
+    if rl_config.use_lineage_modality_scores:
+        metadata_path = _resolve_optional_data_path(config.data.metadata_path, raw_data_dir)
+        if metadata_path is None:
+            raise ValueError("use_lineage_modality_scores requires data.metadata_path in the config.")
+        return build_lineage_supervised_modality_scores(
+            data.dependency,
+            data.modalities,
+            metadata_path,
+            context_column=rl_config.cancer_context_column,
+            train_cell_lines=train_cell_lines,
+            lineage_min_samples=rl_config.lineage_min_samples,
+        )
+    return build_supervised_modality_scores(
+        data.dependency,
+        data.modalities,
+        train_cell_lines=train_cell_lines,
+    )
+
+
+def _load_context_encoder(
+    config: BaselineConfig,
+    raw_data_dir: str | Path | None,
+    rl_config: RLTrainingConfig,
+) -> LineageContextEncoder | None:
+    if not uses_cancer_context(rl_config.q_network_type):
+        return None
+    metadata_path = _resolve_optional_data_path(config.data.metadata_path, raw_data_dir)
+    if metadata_path is None:
+        raise ValueError("context_structured requires data.metadata_path in the config.")
+    return LineageContextEncoder(
+        metadata_path,
+        context_column=rl_config.cancer_context_column,
+    )
+
+
+def _hyperparameters_with_context(
+    hyperparameters: DQNHyperparameters,
+    encoder: StateEncoder,
+    context_encoder: LineageContextEncoder | None,
+) -> DQNHyperparameters:
+    return replace(
+        hyperparameters,
+        n_genes=encoder.n_genes,
+        n_modalities=encoder.n_modalities,
+        n_lineages=context_encoder.n_lineages if context_encoder is not None else 0,
+    )
+
+
+def _maybe_init_context_from_structured(q_network: Any, hyperparameters: DQNHyperparameters) -> None:
+    checkpoint = hyperparameters.init_structured_checkpoint
+    if not checkpoint or not uses_cancer_context(hyperparameters.q_network_type):
+        return
+    from src.dqn import requires_context_indices
+
+    if not requires_context_indices(q_network):
+        return
+    load_structured_checkpoint_into_context(
+        q_network,
+        checkpoint,
+        freeze_shared_heads=hyperparameters.freeze_shared_heads,
+    )
+
+
+def _build_q_network(encoder: StateEncoder, hyperparameters: DQNHyperparameters) -> Any:
+    return build_q_network(
+        encoder.state_size,
+        encoder.action_space.size,
+        hyperparameters.hidden_dim,
+        network_type=hyperparameters.q_network_type,
+        n_genes=encoder.n_genes,
+        n_modalities=encoder.n_modalities,
+        n_lineages=hyperparameters.n_lineages,
+        cancer_context_dim=hyperparameters.cancer_context_dim,
+        fusion_query_boost=hyperparameters.fusion_query_boost,
+        fusion_select_weight=hyperparameters.fusion_select_weight,
+        select_residual_weight=hyperparameters.select_residual_weight,
+    )
+
+
+def _episode_context_index(
+    context_encoder: LineageContextEncoder | None,
+    episode: CandidateEpisode,
+) -> int:
+    if context_encoder is None:
+        return 0
+    return context_encoder.encode(episode.cell_line_id)
 
 
 def _should_validate(

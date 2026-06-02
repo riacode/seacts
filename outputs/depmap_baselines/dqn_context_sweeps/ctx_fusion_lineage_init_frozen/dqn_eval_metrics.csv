@@ -1,0 +1,2 @@
+policy,selected_dependency,hit_at_k,ndcg_at_k,mrr_at_k,query_cost,n_queries,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation
+rl_env_dqn,-0.9445812852874504,0.9,0.599474604048462,0.47533333333333333,0.1984,9.92,0.7461812852874505,5.31,0.59,2.75,1.27

@@ -1,0 +1,2 @@
+policy,selected_dependency,hit_at_k,ndcg_at_k,mrr_at_k,query_cost,n_queries,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,variant,output_path,status
+rl_env_dqn,-1.283297513523879,1.0,0.8371282910181433,0.7946666666666666,0.27848,13.924,1.004817513523879,0.294,1.966,11.662,0.002,ctx_select_only_init_structured,/root/seacts/results/depmap_baselines/dqn_context_sweeps/ctx_select_only_init_structured/dqn_eval_metrics.csv,trained

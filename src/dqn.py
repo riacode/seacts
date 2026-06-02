@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from random import Random
 from typing import Any
 
@@ -38,6 +39,26 @@ class DQNHyperparameters:
     q_network_type: str = "mlp"
     n_genes: int = 0
     n_modalities: int = 0
+    n_lineages: int = 0
+    cancer_context_dim: int = 16
+    init_structured_checkpoint: str | None = None
+    freeze_shared_heads: bool = False
+    fusion_query_boost: float = 2.0
+    fusion_select_weight: float = 1.0
+    select_residual_weight: float = 0.25
+
+
+def uses_cancer_context(network_type: str) -> bool:
+    return network_type in {
+        "context_structured",
+        "context_structured_dueling",
+        "context_select_structured",
+        "context_fusion_structured",
+    }
+
+
+def requires_context_indices(q_network: Any) -> bool:
+    return isinstance(q_network, (ContextStructuredQNetwork, ContextSelectStructuredQNetwork))
 
 
 def build_q_network(
@@ -47,6 +68,11 @@ def build_q_network(
     network_type: str = "mlp",
     n_genes: int = 0,
     n_modalities: int = 0,
+    n_lineages: int = 0,
+    cancer_context_dim: int = 16,
+    fusion_query_boost: float = 2.0,
+    fusion_select_weight: float = 1.0,
+    select_residual_weight: float = 0.25,
 ) -> Any:
     torch, nn, _ = _torch_modules()
     if network_type == "mlp":
@@ -73,7 +99,105 @@ def build_q_network(
             hidden_dim=hidden_dim,
             dueling=True,
         )
+    if network_type in {"context_structured", "context_structured_dueling"}:
+        if n_lineages <= 0:
+            raise ValueError(f"{network_type} requires n_lineages > 0.")
+        return ContextStructuredQNetwork(
+            n_genes=n_genes,
+            n_modalities=n_modalities,
+            hidden_dim=hidden_dim,
+            n_lineages=n_lineages,
+            context_dim=cancer_context_dim,
+            dueling=network_type == "context_structured_dueling",
+        )
+    if network_type == "context_select_structured":
+        if n_lineages <= 0:
+            raise ValueError(f"{network_type} requires n_lineages > 0.")
+        return ContextSelectStructuredQNetwork(
+            n_genes=n_genes,
+            n_modalities=n_modalities,
+            hidden_dim=hidden_dim,
+            n_lineages=n_lineages,
+            context_dim=cancer_context_dim,
+        )
+    if network_type == "context_fusion_structured":
+        if n_lineages <= 0:
+            raise ValueError(f"{network_type} requires n_lineages > 0.")
+        return ContextFusionStructuredQNetwork(
+            n_genes=n_genes,
+            n_modalities=n_modalities,
+            hidden_dim=hidden_dim,
+            n_lineages=n_lineages,
+            context_dim=cancer_context_dim,
+            fusion_query_boost=fusion_query_boost,
+            fusion_select_weight=fusion_select_weight,
+            select_residual_weight=select_residual_weight,
+        )
     raise ValueError(f"Unknown Q-network type: {network_type}")
+
+
+def load_structured_checkpoint_into_context(
+    context_network: "ContextStructuredQNetwork | ContextSelectStructuredQNetwork",
+    checkpoint_path: str | Path,
+    *,
+    freeze_shared_heads: bool = False,
+) -> list[str]:
+    """Initialize compatible layers from a trained StructuredQNetwork checkpoint."""
+    torch, _, _ = _torch_modules()
+    path = Path(checkpoint_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Structured checkpoint not found: {path}")
+    structured_state = torch.load(path, map_location="cpu", weights_only=True)
+    context_state = context_network.state_dict()
+    loaded: list[str] = []
+
+    for key in ("query_head.weight", "query_head.bias", "select_head.weight", "select_head.bias"):
+        if key not in structured_state or key not in context_state:
+            continue
+        if structured_state[key].shape != context_state[key].shape:
+            continue
+        context_state[key] = structured_state[key]
+        loaded.append(key)
+
+    encoder_weight_key = "candidate_encoder.0.weight"
+    encoder_bias_key = "candidate_encoder.0.bias"
+    if encoder_weight_key in structured_state and encoder_weight_key in context_state:
+        source_weight = structured_state[encoder_weight_key]
+        target_weight = context_state[encoder_weight_key].clone()
+        overlap = min(source_weight.shape[1], target_weight.shape[1])
+        target_weight[:, :overlap] = source_weight[:, :overlap]
+        context_state[encoder_weight_key] = target_weight
+        loaded.append(encoder_weight_key)
+    if encoder_bias_key in structured_state and encoder_bias_key in context_state:
+        if structured_state[encoder_bias_key].shape == context_state[encoder_bias_key].shape:
+            context_state[encoder_bias_key] = structured_state[encoder_bias_key]
+            loaded.append(encoder_bias_key)
+
+    encoder_hidden_key = "candidate_encoder.2.weight"
+    if encoder_hidden_key in structured_state and encoder_hidden_key in context_state:
+        if structured_state[encoder_hidden_key].shape == context_state[encoder_hidden_key].shape:
+            context_state[encoder_hidden_key] = structured_state[encoder_hidden_key]
+            loaded.append(encoder_hidden_key)
+        bias_key = "candidate_encoder.2.bias"
+        if bias_key in structured_state and bias_key in context_state:
+            if structured_state[bias_key].shape == context_state[bias_key].shape:
+                context_state[bias_key] = structured_state[bias_key]
+                loaded.append(bias_key)
+
+    context_network.load_state_dict(context_state)
+
+    if freeze_shared_heads:
+        frozen_modules: list[Any] = [
+            context_network.candidate_encoder,
+            context_network.query_head,
+        ]
+        if isinstance(context_network, ContextStructuredQNetwork):
+            frozen_modules.append(context_network.select_head)
+        for module in frozen_modules:
+            for parameter in module.parameters():
+                parameter.requires_grad = False
+
+    return loaded
 
 
 class DuelingMLPQNetwork(nn.Module):
@@ -149,6 +273,211 @@ class StructuredQNetwork(nn.Module):
         return value + advantages - advantages.mean(dim=1, keepdim=True)
 
 
+class ContextStructuredQNetwork(nn.Module):
+    """Structured Q-network with a learned embedding for cancer context (e.g. lineage)."""
+
+    def __init__(
+        self,
+        n_genes: int,
+        n_modalities: int,
+        hidden_dim: int,
+        n_lineages: int,
+        context_dim: int,
+        dueling: bool,
+    ) -> None:
+        super().__init__()
+        if n_genes <= 0 or n_modalities <= 0:
+            raise ValueError("Context structured Q-networks require n_genes and n_modalities.")
+        if n_lineages <= 0:
+            raise ValueError("Context structured Q-networks require n_lineages > 0.")
+        self.n_genes = n_genes
+        self.n_modalities = n_modalities
+        self.dueling = dueling
+        self.per_candidate_size = n_modalities * 2 + 1
+        self.lineage_embed = nn.Embedding(n_lineages, context_dim)
+        candidate_input_size = self.per_candidate_size + 1 + context_dim
+        self.candidate_encoder = nn.Sequential(
+            nn.Linear(candidate_input_size, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        head_input_size = hidden_dim * 2
+        self.query_head = nn.Linear(head_input_size, n_modalities)
+        self.select_head = nn.Linear(head_input_size, 1)
+        value_input_size = hidden_dim + 1 + context_dim if dueling else 0
+        self.value_head = nn.Linear(value_input_size, 1) if dueling else None
+
+    def forward(self, states: Any, context_indices: Any) -> Any:
+        batch_size = states.shape[0]
+        candidate_flat_size = self.n_genes * self.per_candidate_size
+        candidate_features = states[:, :candidate_flat_size].reshape(
+            batch_size,
+            self.n_genes,
+            self.per_candidate_size,
+        )
+        done = states[:, candidate_flat_size:].reshape(batch_size, 1)
+        context = self.lineage_embed(context_indices)
+        context_per_gene = context.unsqueeze(1).expand(-1, self.n_genes, -1)
+        done_expanded = done.unsqueeze(1).expand(-1, self.n_genes, -1)
+        candidate_input = _torch_cat((candidate_features, done_expanded, context_per_gene), dim=2)
+        encoded = self.candidate_encoder(candidate_input)
+        global_context = encoded.mean(dim=1)
+        global_expanded = global_context.unsqueeze(1).expand(-1, self.n_genes, -1)
+        head_input = _torch_cat((encoded, global_expanded), dim=2)
+        query_q = self.query_head(head_input).reshape(batch_size, self.n_genes * self.n_modalities)
+        select_q = self.select_head(head_input).squeeze(-1)
+        advantages = _torch_cat((query_q, select_q), dim=1)
+        if not self.dueling:
+            return advantages
+        if self.value_head is None:
+            raise RuntimeError("Dueling context structured network is missing value_head.")
+        value_input = _torch_cat((global_context, done, context), dim=1)
+        value = self.value_head(value_input)
+        return value + advantages - advantages.mean(dim=1, keepdim=True)
+
+
+class ContextSelectStructuredQNetwork(nn.Module):
+    """Structured query policy; lineage embedding modulates SELECT Q-values only."""
+
+    def __init__(
+        self,
+        n_genes: int,
+        n_modalities: int,
+        hidden_dim: int,
+        n_lineages: int,
+        context_dim: int,
+    ) -> None:
+        super().__init__()
+        if n_genes <= 0 or n_modalities <= 0:
+            raise ValueError("Context select structured Q-networks require n_genes and n_modalities.")
+        if n_lineages <= 0:
+            raise ValueError("Context select structured Q-networks require n_lineages > 0.")
+        self.n_genes = n_genes
+        self.n_modalities = n_modalities
+        self.per_candidate_size = n_modalities * 2 + 1
+        self.lineage_embed = nn.Embedding(n_lineages, context_dim)
+        candidate_input_size = self.per_candidate_size + 1
+        self.candidate_encoder = nn.Sequential(
+            nn.Linear(candidate_input_size, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        head_input_size = hidden_dim * 2
+        self.query_head = nn.Linear(head_input_size, n_modalities)
+        self.select_head = nn.Linear(head_input_size + context_dim, 1)
+
+    def forward(self, states: Any, context_indices: Any) -> Any:
+        batch_size = states.shape[0]
+        candidate_flat_size = self.n_genes * self.per_candidate_size
+        candidate_features = states[:, :candidate_flat_size].reshape(
+            batch_size,
+            self.n_genes,
+            self.per_candidate_size,
+        )
+        done = states[:, candidate_flat_size:].reshape(batch_size, 1)
+        done_expanded = done.unsqueeze(1).expand(-1, self.n_genes, -1)
+        candidate_input = _torch_cat((candidate_features, done_expanded), dim=2)
+        encoded = self.candidate_encoder(candidate_input)
+        global_context = encoded.mean(dim=1)
+        global_expanded = global_context.unsqueeze(1).expand(-1, self.n_genes, -1)
+        head_input = _torch_cat((encoded, global_expanded), dim=2)
+        query_q = self.query_head(head_input).reshape(batch_size, self.n_genes * self.n_modalities)
+        context = self.lineage_embed(context_indices)
+        context_per_gene = context.unsqueeze(1).expand(-1, self.n_genes, -1)
+        select_input = _torch_cat((head_input, context_per_gene), dim=2)
+        select_q = self.select_head(select_input).squeeze(-1)
+        return _torch_cat((query_q, select_q), dim=1)
+
+
+class ContextFusionStructuredQNetwork(ContextStructuredQNetwork):
+    """Context DQN with lineage-specific modality fusion for query and selection."""
+
+    def __init__(
+        self,
+        n_genes: int,
+        n_modalities: int,
+        hidden_dim: int,
+        n_lineages: int,
+        context_dim: int,
+        *,
+        fusion_query_boost: float = 2.0,
+        fusion_select_weight: float = 1.0,
+        select_residual_weight: float = 0.25,
+    ) -> None:
+        super().__init__(
+            n_genes=n_genes,
+            n_modalities=n_modalities,
+            hidden_dim=hidden_dim,
+            n_lineages=n_lineages,
+            context_dim=context_dim,
+            dueling=False,
+        )
+        self.modality_weight_head = nn.Linear(context_dim, n_modalities)
+        self.fusion_query_boost = float(fusion_query_boost)
+        self.fusion_select_weight = float(fusion_select_weight)
+        self.select_residual_weight = float(select_residual_weight)
+
+    def forward(self, states: Any, context_indices: Any) -> Any:
+        batch_size = states.shape[0]
+        candidate_flat_size = self.n_genes * self.per_candidate_size
+        candidate_features = states[:, :candidate_flat_size].reshape(
+            batch_size,
+            self.n_genes,
+            self.per_candidate_size,
+        )
+        done = states[:, candidate_flat_size:].reshape(batch_size, 1)
+        context = self.lineage_embed(context_indices)
+        modality_weights = torch.softmax(self.modality_weight_head(context), dim=-1)
+
+        obs_values = candidate_features[:, :, : self.n_modalities]
+        obs_masks = candidate_features[:, :, self.n_modalities : 2 * self.n_modalities]
+
+        context_per_gene = context.unsqueeze(1).expand(-1, self.n_genes, -1)
+        done_expanded = done.unsqueeze(1).expand(-1, self.n_genes, -1)
+        candidate_input = _torch_cat((candidate_features, done_expanded, context_per_gene), dim=2)
+        encoded = self.candidate_encoder(candidate_input)
+        global_context = encoded.mean(dim=1)
+        global_expanded = global_context.unsqueeze(1).expand(-1, self.n_genes, -1)
+        head_input = _torch_cat((encoded, global_expanded), dim=2)
+        query_q = self.query_head(head_input).reshape(
+            batch_size,
+            self.n_genes,
+            self.n_modalities,
+        )
+        select_residual = self.select_head(head_input).squeeze(-1)
+
+        weighted_obs = obs_values * obs_masks * modality_weights.unsqueeze(1)
+        fused_select = weighted_obs.sum(dim=-1)
+        has_obs = obs_masks.sum(dim=-1) > 0
+        select_q = (
+            self.fusion_select_weight * fused_select
+            + self.select_residual_weight * select_residual
+        )
+        select_q = torch.where(
+            has_obs,
+            select_q,
+            torch.full_like(select_q, -1.0e9),
+        )
+
+        query_q = query_q + self.fusion_query_boost * modality_weights.unsqueeze(1)
+        advantages = _torch_cat((query_q.reshape(batch_size, -1), select_q), dim=1)
+        return advantages
+
+
+def forward_q_network(
+    q_network: Any,
+    states: Any,
+    context_indices: Any | None = None,
+) -> Any:
+    if requires_context_indices(q_network):
+        if context_indices is None:
+            raise ValueError("context Q-networks require context_indices.")
+        return q_network(states, context_indices)
+    return q_network(states)
+
+
 def _torch_cat(items: tuple[Any, ...], dim: int) -> Any:
     return torch.cat(items, dim=dim)
 
@@ -161,6 +490,7 @@ def select_epsilon_greedy_action(
     rng: Random,
     select_action_indices: np.ndarray | None = None,
     select_exploration_probability: float = 0.0,
+    context_index: int = 0,
 ) -> int:
     valid_indices = np.flatnonzero(valid_actions)
     if len(valid_indices) == 0:
@@ -173,10 +503,20 @@ def select_epsilon_greedy_action(
         ):
             return int(rng.choice(valid_select_indices.tolist()))
         return int(rng.choice(valid_indices.tolist()))
-    return select_greedy_action(q_network, state, valid_actions)
+    return select_greedy_action(
+        q_network,
+        state,
+        valid_actions,
+        context_index=context_index,
+    )
 
 
-def select_greedy_action(q_network: Any, state: np.ndarray, valid_actions: np.ndarray) -> int:
+def select_greedy_action(
+    q_network: Any,
+    state: np.ndarray,
+    valid_actions: np.ndarray,
+    context_index: int = 0,
+) -> int:
     torch, _, _ = _torch_modules()
     valid_indices = np.flatnonzero(valid_actions)
     if len(valid_indices) == 0:
@@ -184,7 +524,8 @@ def select_greedy_action(q_network: Any, state: np.ndarray, valid_actions: np.nd
 
     with torch.no_grad():
         state_tensor = torch.as_tensor(state, dtype=torch.float32).unsqueeze(0)
-        q_values = q_network(state_tensor).squeeze(0).detach().cpu().numpy()
+        context_tensor = _context_tensor(context_index, q_network)
+        q_values = forward_q_network(q_network, state_tensor, context_tensor).squeeze(0).detach().cpu().numpy()
     masked_values = np.full_like(q_values, fill_value=-np.inf, dtype=np.float32)
     masked_values[valid_indices] = q_values[valid_indices]
     return int(np.argmax(masked_values))
@@ -212,13 +553,23 @@ def optimize_dqn_batch(
         dtype=torch.bool,
     )
     done = torch.as_tensor([item.done for item in transitions], dtype=torch.bool)
+    context_indices = torch.as_tensor(
+        [item.context_index for item in transitions],
+        dtype=torch.int64,
+    )
 
-    current_q = q_network(states).gather(1, actions).squeeze(1)
+    current_q = forward_q_network(q_network, states, context_indices).gather(1, actions).squeeze(1)
     with torch.no_grad():
         # Double DQN: online network selects the next action, target network evaluates it.
-        next_online_q = q_network(next_states).masked_fill(~next_valid, -1.0e9)
+        next_online_q = forward_q_network(q_network, next_states, context_indices).masked_fill(
+            ~next_valid,
+            -1.0e9,
+        )
         next_actions = next_online_q.argmax(dim=1, keepdim=True)
-        next_target_q = target_network(next_states).gather(1, next_actions).squeeze(1)
+        next_target_q = forward_q_network(target_network, next_states, context_indices).gather(
+            1,
+            next_actions,
+        ).squeeze(1)
         next_target_q = torch.where(done, torch.zeros_like(next_target_q), next_target_q)
         n_steps = torch.as_tensor([item.n_steps for item in transitions], dtype=torch.float32)
         discounts = torch.pow(torch.full_like(n_steps, gamma), n_steps)
@@ -241,6 +592,13 @@ def epsilon_by_step(step: int, hyperparameters: DQNHyperparameters) -> float:
         hyperparameters.epsilon_start
         + progress * (hyperparameters.epsilon_end - hyperparameters.epsilon_start)
     )
+
+
+def _context_tensor(context_index: int, q_network: Any) -> Any | None:
+    if not requires_context_indices(q_network):
+        return None
+    torch, _, _ = _torch_modules()
+    return torch.as_tensor([context_index], dtype=torch.int64)
 
 
 def _valid_select_indices(

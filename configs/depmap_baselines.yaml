@@ -57,6 +57,12 @@ rl_training:
   expert_seed_refinement_modality: cna
   expert_seed_refinement_top_k: 4
   min_queries_before_select: 8
+  # Lineage-specific query returns (environment): set use_lineage_modality_scores: true
+  # New sweep variants: struct_lineage_env_scores, ctx_lineage_env_init_structured
+  # Context fusion DQN (lineage-gated modality weights + per-lineage scores):
+  # q_network_type: context_fusion_structured
+  # use_lineage_modality_scores: true
+  # query_shaping_alpha: 0.05
   wandb_log_interval: 25
   split_cell_lines: true
   validation_cell_line_fraction: 0.1

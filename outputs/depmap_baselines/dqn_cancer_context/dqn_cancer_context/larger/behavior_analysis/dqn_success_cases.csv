@@ -1,0 +1,21 @@
+episode_id,cell_line_id,selected_gene,selected_dependency,dependency_regret,hit_at_k,n_queries,query_cost,total_reward,n_query_cna,n_query_damaging_mutation,n_query_expression,n_query_hotspot_mutation,OncotreeLineage,OncotreePrimaryDisease,OncotreeSubtype
+0,ACH-000417,ERCC3,-0.9712048192702762,0.0,1.0,8,0.16,0.8112048192702762,8,0,0,0,Pancreas,Pancreatic Adenocarcinoma,Pancreatic Adenocarcinoma
+1,ACH-000552,KIF18A,-3.3760423938541426,0.0,1.0,8,0.16,3.2160423938541425,8,0,0,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+2,ACH-000172,CHD4,-1.2336927489255478,0.0,1.0,8,0.16,1.073692748925548,7,0,1,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+3,ACH-000422,MYC,-2.084482650782212,0.0,1.0,8,0.16,1.924482650782212,7,0,1,0,Liver,Hepatocellular Carcinoma,Hepatocellular Carcinoma
+4,ACH-000845,CHD4,-0.7769531642632684,0.0,1.0,8,0.16,0.6169531642632684,8,0,0,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+6,ACH-002055,XPO1,-2.371056896549552,0.0,1.0,8,0.16,2.211056896549552,7,0,1,0,Lymphoid,Mature B-Cell Neoplasms,Burkitt Lymphoma
+11,ACH-001307,H3-3A,-1.1690368672527214,0.0,1.0,8,0.16,1.0090368672527217,2,0,5,1,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+14,ACH-000915,NCAPD2,-0.9890518222404616,0.0,1.0,8,0.16,0.8290518222404616,1,5,1,1,Skin,Melanoma,Cutaneous Melanoma
+16,ACH-000097,ICE1,-1.3922539859433556,0.0,1.0,8,0.16,1.2322539859433557,8,0,0,0,Breast,Invasive Breast Carcinoma,Breast Invasive Ductal Carcinoma
+17,ACH-000323,EIF1AX,-2.2139732514964847,0.0,1.0,8,0.16,2.053973251496485,8,0,0,0,CNS/Brain,Adult-Type Diffuse Glioma,"Glioblastoma, IDH-Wildtype"
+18,ACH-000172,CCND1,-0.9123303606210482,0.0,1.0,8,0.16,0.7523303606210482,7,0,1,0,Soft Tissue,Rhabdoid Cancer,Extrarenal Rhabdoid Cancer
+22,ACH-000191,PPP2R1A,-1.459626209444615,0.0,1.0,8,0.16,1.2996262094446152,2,0,5,1,Thyroid,Anaplastic Thyroid Cancer,Anaplastic Thyroid Cancer
+24,ACH-000097,POLE,-1.488831150147397,0.0,1.0,8,0.16,1.328831150147397,7,0,1,0,Breast,Invasive Breast Carcinoma,Breast Invasive Ductal Carcinoma
+25,ACH-000371,SON,-1.2570513243849812,0.0,1.0,8,0.16,1.097051324384981,8,0,0,0,Lymphoid,Mature B-Cell Neoplasms,"Diffuse Large B-Cell Lymphoma, NOS"
+27,ACH-000030,H3-3A,-1.8741200531751503,0.0,1.0,8,0.16,1.7141200531751504,7,0,1,0,Lung,Non-Small Cell Lung Cancer,Lung Adenocarcinoma
+29,ACH-000697,RFC5,-1.7025395259713765,0.0,1.0,8,0.16,1.5425395259713766,8,0,0,0,Lymphoid,Mature B-Cell Neoplasms,"Diffuse Large B-Cell Lymphoma, NOS"
+31,ACH-000978,TRRAP,-1.847826594010322,0.0,1.0,8,0.16,1.687826594010322,5,0,3,0,Uterus,Endometrial Carcinoma,Endometrial Carcinoma
+33,ACH-000381,TRAPPC8,-0.9244750217013552,0.0,1.0,8,0.16,0.7644750217013552,8,0,0,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma
+36,ACH-000144,PCBP1,-1.8443416735635787,0.0,1.0,8,0.16,1.6843416735635788,8,0,0,0,Esophagus/Stomach,Esophagogastric Adenocarcinoma,Stomach Adenocarcinoma
+40,ACH-000381,CTCF,-2.018059979473116,0.0,1.0,8,0.16,1.858059979473116,8,0,0,0,Bowel,Colorectal Adenocarcinoma,Colon Adenocarcinoma

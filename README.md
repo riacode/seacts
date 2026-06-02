@@ -210,6 +210,14 @@ Run targeted DQN hyperparameter variants and save a sweep summary:
 modal run modal_sweep_dqn.py
 ```
 
+Run Context DQN sweeps (context dim, dueling, structured checkpoint init, etc.):
+
+```bash
+modal run modal_sweep_context_dqn.py
+```
+
+Results are written to `depmap_baselines/dqn_context_sweeps/` on the `seacts-results` volume.
+
 Run the DQN architecture/algorithm ablation:
 
 ```bash
@@ -273,6 +281,7 @@ modal_data_baselines.py        # Modal data-baseline runner
 modal_environment_baselines.py # Modal environment-baseline runner
 modal_log_dqn_behavior.py      # Modal DQN trajectory/behavior analysis
 modal_sweep_dqn.py             # Modal DQN hyperparameter sweep runner
+modal_sweep_context_dqn.py     # Modal Context DQN improvement sweep runner
 modal_train_dqn.py             # Modal DQN training runner
 modal_visualizations.py        # Modal plotting runner
 src/modal_config.py            # Shared Modal app/image/volume setup
