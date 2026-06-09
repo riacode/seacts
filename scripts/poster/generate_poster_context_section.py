@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Regenerate poster_outputs/03_lineage_and_context figures."""
 from __future__ import annotations
 
 import argparse
@@ -18,7 +17,7 @@ from src.visualization import (
     resolve_context_sweep_variant_with_behavior,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "outputs" / "depmap_baselines"
 CONTEXT_SWEEP_DIR = RESULTS / "dqn_context_sweeps"
 POSTER_SECTION = ROOT / "poster_outputs" / "03_lineage_and_context"
@@ -159,7 +158,7 @@ def main() -> None:
             f"  Log behavior for the best eval run, then pull and re-run:\n"
             f"  modal run modal_log_dqn_behavior.py --variant {behavior_variant}\n"
             f"  ./scripts/pull_modal_results.sh\n"
-            f"  conda run -n seacts python scripts/regenerate_poster.py"
+            f"  conda run -n seacts python scripts/poster/regenerate_poster.py"
         )
         if metrics:
             print(f"  (eval metrics exist at {metrics})")

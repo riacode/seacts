@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Regenerate all poster figure sections with consistent context-sweep selection."""
 from __future__ import annotations
 
 import argparse
@@ -14,7 +13,7 @@ from poster_figures import (
     regenerate_lineage_heatmaps,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> None:
@@ -27,8 +26,8 @@ def main() -> None:
     args = parser.parse_args()
 
     scripts = (
-        ROOT / "scripts" / "generate_poster_outputs.py",
-        ROOT / "scripts" / "generate_poster_context_section.py",
+        ROOT / "scripts" / "poster" / "generate_poster_outputs.py",
+        ROOT / "scripts" / "poster" / "generate_poster_context_section.py",
     )
     variant_args = ["--context-variant", args.context_variant] if args.context_variant.strip() else []
 

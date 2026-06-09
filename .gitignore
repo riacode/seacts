@@ -6,13 +6,22 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-hw3 copy/
 
+# local data
 data/raw/
 data/interim/
 data/processed/
-tests/
+.tmp_modal_counts/
+
+# experiment outputs
+outputs/
+poster_outputs/
+*.pt
 
 .DS_Store
 .vscode/
+hw3 copy/
+
+# markdown drafts
 *.md
+!README.md

@@ -1,26 +1,20 @@
-"""Shared poster-only figure generators.
-
-These are small, opinionated figures for the final poster narrative. They are
-kept in one module so the scripts directory does not accumulate one-off
-generators.
-"""
 from __future__ import annotations
 
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.ticker import FuncFormatter
 import pandas as pd
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "outputs" / "depmap_baselines"
 POSTER = ROOT / "poster_outputs"
 
 MODEL_COLOR = "#6A4C93"
 BASE_COLOR = "#B7A6D6"
 SELECT_COLOR = "#3B2E58"
-# Match poster_outputs/reward_graph.png at dpi=180: 5056 x 2656 px.
 BAR_FIGSIZE = (5056 / 180, 2656 / 180)
 BAR_DPI = 180
 TITLE_SIZE = 42
@@ -47,8 +41,46 @@ MODALITY_COLOR_BY_KEY = {
 TRAJECTORY_COLORS = {**MODALITY_COLOR_BY_KEY, "select": "#333333"}
 
 
+def generate_validation_reward_graph() -> None:
+    metrics_path = RESULTS / "dqn_context_sweeps" / "ctx_select_only_init_frozen" / "dqn_training_metrics.csv"
+    output_path = POSTER / "reward_graph.png"
+    frame = pd.read_csv(metrics_path)
+    validation = frame.dropna(subset=["validation_total_reward"]).copy()
+    validation["step"] = validation["episode"] + 1
+
+    fig, ax = plt.subplots(figsize=BAR_FIGSIZE, dpi=BAR_DPI)
+    ax.plot(
+        validation["step"],
+        validation["validation_total_reward"],
+        color=MODEL_COLOR,
+        linewidth=4.2,
+        marker="o",
+        markersize=6.5,
+        markerfacecolor="white",
+        markeredgewidth=2.0,
+        markeredgecolor=MODEL_COLOR,
+    )
+
+    ax.set_title("Validation Reward During Context DQN Training", fontsize=TITLE_SIZE, pad=24)
+    ax.set_xlabel("Training episode", fontsize=LABEL_SIZE)
+    ax.set_ylabel("Mean validation reward", fontsize=LABEL_SIZE)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value / 1000:.0f}k" if value else "0"))
+    ax.tick_params(axis="both", labelsize=TICK_SIZE)
+    ax.grid(axis="y", color="#D7D7E2", linewidth=1.6, alpha=0.85)
+    ax.grid(axis="x", color="#EEEEF3", linewidth=1.0, alpha=0.45)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#7E7A89")
+    ax.spines["bottom"].set_color("#7E7A89")
+    ax.set_xlim(0, 20000)
+    ax.set_ylim(0.62, 1.07)
+    fig.subplots_adjust(left=0.12, right=0.97, top=0.86, bottom=0.18)
+    fig.savefig(output_path, dpi=BAR_DPI, facecolor="white")
+    plt.close(fig)
+    print(f"Wrote {output_path}")
+
+
 def generate_ablation_storyline_figures() -> None:
-    """Generate horizontal reward/modality figures for the 6 architecture ablations."""
     output_dir = POSTER / "02_architecture_ablations"
     output_dir.mkdir(parents=True, exist_ok=True)
     runs = (
@@ -75,7 +107,6 @@ def generate_ablation_storyline_figures() -> None:
 
 
 def generate_context_storyline_figure() -> None:
-    """Generate separate reward/modality figures for the context design sweep."""
     output_dir = POSTER / "03_lineage_and_context"
     runs = (
         ("Context from start", RESULTS / "dqn_context_sweeps" / "ctx_larger_init_structured" / "dqn_eval_metrics.csv", BASE_COLOR),
@@ -105,7 +136,6 @@ def generate_context_storyline_figure() -> None:
 
 
 def generate_representative_context_trajectories() -> None:
-    """Generate final Context DQN trajectories representative of actual modality usage."""
     run_dir = RESULTS / "dqn_context_sweeps" / "ctx_select_only_init_frozen"
     output_path = POSTER / "03_lineage_and_context" / "context_dqn_representative_example_trajectories.png"
     steps = pd.read_csv(run_dir / "dqn_step_log.csv")
@@ -137,7 +167,6 @@ def generate_representative_context_trajectories() -> None:
 
 
 def regenerate_lineage_heatmaps() -> None:
-    """Regenerate lineage heatmaps with a non-modality colormap."""
     output_dir = POSTER / "03_lineage_and_context"
     sources = (
         (
@@ -266,7 +295,9 @@ def _plot_trajectories(steps: pd.DataFrame, episodes: pd.DataFrame, selected: li
         int(row.episode_id): f"{int(row.episode_id)} {row.selected_gene} r={float(row.dependency_regret):.2f}"
         for row in selected_episodes.itertuples(index=False)
     }
-    fig, ax = plt.subplots(figsize=BAR_FIGSIZE, dpi=BAR_DPI)
+    # legend room
+    trajectory_figsize = (5056 / BAR_DPI, 3000 / BAR_DPI)
+    fig, ax = plt.subplots(figsize=trajectory_figsize, dpi=BAR_DPI)
     y_positions = {episode_id: index for index, episode_id in enumerate(selected)}
     for row in frame.itertuples(index=False):
         action_type = str(row.action_type)
@@ -295,10 +326,10 @@ def _plot_trajectories(steps: pd.DataFrame, episodes: pd.DataFrame, selected: li
         plt.Line2D([0], [0], color=color, linewidth=10, label=legend_labels[label])
         for label, color in TRAJECTORY_COLORS.items()
     ]
-    ax.legend(handles=handles, loc="lower right", ncols=2, fontsize=LEGEND_SIZE)
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, 0.035), ncols=5, fontsize=LEGEND_SIZE)
     ax.grid(axis="x", alpha=0.2)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.subplots_adjust(left=0.22, right=0.97, top=0.88, bottom=0.14)
+    fig.subplots_adjust(left=0.22, right=0.97, top=0.895, bottom=0.24)
     fig.savefig(output_path, dpi=BAR_DPI, facecolor="white")
     plt.close(fig)
     print(f"Wrote {output_path}")

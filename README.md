@@ -275,9 +275,9 @@ Pull and regenerate local poster result figures from the Modal results volume:
 
 ```bash
 scripts/pull_modal_results.sh
-python scripts/generate_poster_outputs.py
-python scripts/generate_poster_context_section.py
-python scripts/regenerate_poster.py
+python scripts/poster/generate_poster_outputs.py
+python scripts/poster/generate_poster_context_section.py
+python scripts/poster/regenerate_poster.py
 ```
 
 The downloader fetches the DepMap manifest fresh from `https://depmap.org/portal/api/download/files`, selects the latest `DepMap Public` release by default, and downloads the dependency matrix, metadata, gene-aligned evidence matrices, and context files needed for the project:
@@ -321,16 +321,19 @@ src/
 └── state_encoder.py         # State vectorization and action indexing
 
 scripts/
-├── analyze_dqn_behavior.py
-├── generate_poster_context_section.py
-├── generate_poster_outputs.py
-├── plot_baseline_results.py
-├── poster_figures.py
 ├── pull_modal_results.sh
-├── regenerate_poster.py
-├── run_data_baselines.py
-├── run_environment_baselines.py
-└── train_dqn.py
+├── zip_submission.sh
+├── local/
+│   ├── analyze_dqn_behavior.py
+│   ├── plot_baseline_results.py
+│   ├── run_data_baselines.py
+│   ├── run_environment_baselines.py
+│   └── train_dqn.py
+└── poster/
+    ├── generate_poster_context_section.py
+    ├── generate_poster_outputs.py
+    ├── poster_figures.py
+    └── regenerate_poster.py
 
 modal_ablate_dqn.py            # Modal DQN architecture/algorithm ablation runner
 modal_cancer_context_dqn.py    # Modal cancer-context DQN runner
@@ -439,7 +442,7 @@ under `depmap_baselines/dqn_context_sweeps/<variant>/`.
 The same summaries can be generated locally from saved CSVs:
 
 ```bash
-python scripts/analyze_dqn_behavior.py \
+python scripts/local/analyze_dqn_behavior.py \
   --episodes outputs/depmap_baselines/dqn_episode_summary.csv \
   --steps outputs/depmap_baselines/dqn_step_log.csv \
   --metadata data/raw/Model.csv

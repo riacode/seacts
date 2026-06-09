@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Regenerate poster_outputs/01_main_results figures (single Context DQN on poster)."""
 from __future__ import annotations
 
 import argparse
@@ -16,7 +15,7 @@ from src.visualization import (
     _resolve_context_sweep_eval_path,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "outputs" / "depmap_baselines"
 CANCER_CONTEXT_DIR = RESULTS / "dqn_cancer_context"
 CONTEXT_SWEEP_DIR = RESULTS / "dqn_context_sweeps"
