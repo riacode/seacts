@@ -17,9 +17,19 @@ zip -r "$OUT" \
   configs/ \
   data/README.md \
   src/ \
-  scripts/ \
+  scripts/local/ \
+  scripts/zip_submission.sh \
   tests/ \
-  modal_*.py \
+  modal_ablate_dqn.py \
+  modal_cancer_context_dqn.py \
+  modal_data.py \
+  modal_data_baselines.py \
+  modal_environment_baselines.py \
+  modal_log_dqn_behavior.py \
+  modal_sweep_context_dqn.py \
+  modal_sweep_dqn.py \
+  modal_train_dqn.py \
+  modal_visualizations.py \
   -x '*__pycache__*' '*/*.pyc' '*/*.pt' '*.DS_Store'
 
 echo "Wrote $REPO_ROOT/$OUT"
