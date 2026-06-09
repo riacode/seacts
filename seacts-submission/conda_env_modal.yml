@@ -1,8 +1,0 @@
-name: seacts-modal
-channels:
-  - conda-forge
-dependencies:
-  - python=3.11
-  - pip
-  - pip:
-      - modal>=1.1
