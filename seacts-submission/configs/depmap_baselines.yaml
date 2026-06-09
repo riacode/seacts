@@ -1,0 +1,77 @@
+seed: 224
+
+data:
+  dependency_path: data/raw/CRISPRGeneEffect.csv
+  metadata_path: data/raw/Model.csv
+  modalities:
+    expression: data/raw/OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv
+    damaging_mutation: data/raw/OmicsSomaticMutationsMatrixDamaging.csv
+    hotspot_mutation: data/raw/OmicsSomaticMutationsMatrixHotspot.csv
+    cna: data/raw/PortalOmicsCNGeneLog2.csv
+episodes:
+  n_episodes: 1000
+  candidates_per_episode: 16
+  positives_per_episode: 2
+  dependency_threshold: -0.5
+  min_candidates_per_cell_line: 32
+
+evaluation:
+  top_k: 3
+  full_query_cost: 3.0
+
+environment:
+  use_supervised_modality_scores: true
+  # Normalized evidence-acquisition costs on the same scale as dependency reward.
+  # These are relative burden proxies for already available computational evidence,
+  # not literal assay prices.
+  query_costs:
+    expression: 0.02
+    cna: 0.02
+    damaging_mutation: 0.02
+    hotspot_mutation: 0.02
+  repeated_query_penalty: 0.0
+  selection_reward_scale: 1.0
+
+rl_training:
+  train_episodes: 10000
+  eval_episodes: 500
+  validation_episodes: 100
+  hidden_dim: 128
+  learning_rate: 0.0001
+  gamma: 0.95
+  batch_size: 64
+  replay_capacity: 20000
+  learning_starts: 500
+  train_frequency: 4
+  target_update_steps: 500
+  max_grad_norm: 10.0
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_decay_steps: 20000
+  max_steps_per_episode: 32
+  select_exploration_probability: 0.25
+  validation_interval: 100
+  expert_seed_episodes: 0
+  expert_seed_modality: expression
+  expert_seed_strategy: single_modality
+  expert_seed_refinement_modality: cna
+  expert_seed_refinement_top_k: 4
+  min_queries_before_select: 8
+  # Lineage-specific query returns (environment): set use_lineage_modality_scores: true
+  # New sweep variants: struct_lineage_env_scores, ctx_lineage_env_init_structured
+  # Context fusion DQN (lineage-gated modality weights + per-lineage scores):
+  # q_network_type: context_fusion_structured
+  # use_lineage_modality_scores: true
+  # query_shaping_alpha: 0.05
+  wandb_log_interval: 25
+  split_cell_lines: true
+  validation_cell_line_fraction: 0.1
+  eval_cell_line_fraction: 0.1
+
+tracking:
+  wandb:
+    enabled: true
+    entity: seacts
+    project: seacts
+
+output_dir: outputs/depmap_baselines
