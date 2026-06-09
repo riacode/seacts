@@ -232,7 +232,7 @@ class StructuredQNetwork(nn.Module):
         self.n_genes = n_genes
         self.n_modalities = n_modalities
         self.dueling = dueling
-        self.per_candidate_size = n_modalities * 2 + 1  # values, masks, gene slot  # values, masks, gene slot
+        self.per_candidate_size = n_modalities * 2 + 1  # values, masks, gene slot
         candidate_input_size = self.per_candidate_size + 1
         self.candidate_encoder = nn.Sequential(
             nn.Linear(candidate_input_size, hidden_dim),
